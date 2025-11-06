@@ -35,7 +35,7 @@ print("\n[3/5] Creating test dataset...")
 try:
     dataset = BlockPushDataset(num_samples=10)
     sample = dataset[0]
-    print(f"✓ Dataset created successfully")
+    print("✓ Dataset created successfully")
     print(f"  Sample image shape: {sample['image'].shape}")
     print(f"  Sample instruction: {sample['instruction']}")
     print(f"  Sample action: {sample['action']}")
@@ -49,7 +49,7 @@ try:
     model = create_tiny_vla()
     model = model.to(device)
     param_count = model.count_parameters()
-    print(f"✓ Model created successfully")
+    print("✓ Model created successfully")
     print(f"  Total parameters: {param_count['total']:,}")
     print(f"  Model size: ~{param_count['total'] / 1e6:.1f}M")
 except Exception as e:
@@ -70,7 +70,7 @@ try:
         images, input_ids, attention_mask = model.prepare_inputs(images, instructions)
         actions = model(images, input_ids, attention_mask)
     
-    print(f"✓ Forward pass successful")
+    print("✓ Forward pass successful")
     print(f"  Input shape: {images.shape}")
     print(f"  Output shape: {actions.shape}")
     print(f"  Sample prediction: {actions[0].cpu().numpy()}")

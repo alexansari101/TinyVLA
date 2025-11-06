@@ -30,5 +30,12 @@ dependencies = [
     "tensorboard~=2.20.0",
 ]
 
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.uv]
 dev-dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["tiny_vla_model.py", "tiny_vla_dataset.py", "train_tiny_vla.py", "inference_tiny_vla.py", "test_setup.py"]
