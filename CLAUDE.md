@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TinyVLA is a minimal (~25M parameter) Vision-Language-Action model designed for rapid experimentation on limited compute. It's architecturally similar to state-of-the-art VLA models (SmolVLA, OpenVLA) but 18x smaller for 20x faster training iterations.
+TinyVLA is a minimal (~13M parameter) Vision-Language-Action model designed for rapid experimentation on limited compute. It's architecturally similar to state-of-the-art VLA models (SmolVLA, OpenVLA) but ~35x smaller for ultra-fast training iterations.
 
 ## Design Goals
 
-- **Fast iteration**: Train in 10-20 minutes on RTX 3070 or free Colab
+- **Fast iteration**: Train in 1-2 minutes on RTX 3070 or free Colab
 - **Similar architecture to SOTA**: Uses ViT + Transformer decoder (like SmolVLA/OpenVLA). Same architecture as production VLAs, just smaller to allow for rapid iteration.
 - **Easy to scale**: Same code structure as larger VLAs - just change config
 - **Educational**: Clear, documented code for learning VLA fundamentals
@@ -26,7 +26,7 @@ Alternative with pip: `python3.11 -m venv .venv && source .venv/bin/activate && 
 
 ### Training
 ```bash
-# Train with default config (15 min on RTX 3070)
+# Train with default config (1-2 min on RTX 3070)
 python train_tiny_vla.py
 
 # Monitor training
@@ -94,7 +94,7 @@ This is deliberately simple for fast iteration. For production scaling, consider
 All hyperparameters are in `train_tiny_vla.py:232-256`. To scale up:
 
 ```python
-# TinyVLA (current): ~25M params, 15 min training
+# TinyVLA (current): ~13M params, 1-2 min training
 config['model'] = {
     'vision_embed_dim': 192,
     'vision_layers': 4,
@@ -208,7 +208,7 @@ for param in self.language_model.parameters():
     param.requires_grad = False
 ```
 
-This gives SmolVLA-like performance while maintaining ~5 min training time!
+This gives SmolVLA-like performance while maintaining ~2-3 min training time!
 
 ### LoRA Fine-tuning for Large Models
 
@@ -250,13 +250,13 @@ model = get_peft_model(model, lora_config)
 
 | Component | TinyVLA | SmolVLA | OpenVLA |
 |-----------|---------|---------|---------|
-| Parameters | 25M | 450M | 7B |
+| Parameters | 13M | 450M | 7B |
 | Vision | TinyViT (4 layers) | SigLip | SigLip-Large |
 | Language | Custom (4 layers) | Phi-2 (32 layers) | Llama-2-7B |
 | Fusion | Pooling + Add | Cross-Attention | Cross-Attention |
-| Training Time (RTX 3070) | 15 min | 5 hours | N/A |
+| Training Time (RTX 3070) | 1-2 min | 5 hours | N/A |
 
-**Key Insight**: The architectural *pattern* is identical across all sizes. You can prototype on TinyVLA in 15 minutes, then scale to production sizes by simply changing config values and using pretrained components.
+**Key Insight**: The architectural *pattern* is identical across all sizes. You can prototype on TinyVLA in 1-2 minutes, then scale to production sizes by simply changing config values and using pretrained components.
 
 ## Extending to Real Robotics
 

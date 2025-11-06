@@ -8,7 +8,7 @@ This document shows how TinyVLA's architecture relates to larger, production VLA
 
 | Component | TinyVLA | SmolVLA | OpenVLA | RT-2 |
 |-----------|---------|---------|---------|------|
-| **Total Parameters** | 25M | 450M | 7B | 55B |
+| **Total Parameters** | 13M | 450M | 7B | 55B |
 | **Vision Encoder** | TinyViT (4 layers) | SigLip (12 layers) | SigLip-Large | PaLI-X ViT |
 | **Vision Dim** | 192 | 384 | 1024 | 2048 |
 | **Vision Patches** | 8x8 | 16x16 | 16x16 | 16x16 |
@@ -17,7 +17,7 @@ This document shows how TinyVLA's architecture relates to larger, production VLA
 | **Language Layers** | 4 | 32 | 32 | 48 |
 | **Fusion Method** | Pooling + Add | Cross-Attention | Cross-Attention | Cross-Attention |
 | **Action Head** | 2-layer MLP | 3-layer MLP | 3-layer MLP | 4-layer MLP |
-| **Training Time (RTX 3070)** | 15 min | 5 hours | N/A | N/A |
+| **Training Time (RTX 3070)** | 1-2 min | 5 hours | N/A | N/A |
 | **GPU Memory** | 2-3 GB | 12-16 GB | 40+ GB | 80+ GB |
 | **Typical Use Case** | Learning/Prototyping | Research/Fine-tuning | Production | Large-scale deployment |
 
@@ -58,13 +58,13 @@ Vision Features + Language Features → Fusion → Action Prediction
 
 ## Scaling Path: From TinyVLA to Production
 
-### Stage 1: TinyVLA (25M) - **You are here**
+### Stage 1: TinyVLA (13M) - **You are here**
 ```python
 vision_dim=192, vision_layers=4
 lang_dim=256, lang_layers=4
 ```
 - **Purpose**: Learn VLA basics, rapid iteration
-- **Training**: 15 minutes
+- **Training**: 1-2 minutes
 - **Hardware**: Single GPU (RTX 3070)
 
 ### Stage 2: MediumVLA (100M)
@@ -256,7 +256,7 @@ This proves the model is doing vision-language fusion correctly.
 | **Training** | Same paradigm (behavioral cloning) |
 | **Scaling** | Change hyperparameters, not code structure |
 | **Learning** | TinyVLA teaches you production VLA concepts |
-| **Speed** | 25M = 15 min, 450M = 5 hrs, 7B = days |
+| **Speed** | 13M = 1-2 min, 450M = 5 hrs, 7B = days |
 | **Performance** | Larger = better, but diminishing returns |
 
 **Bottom line**: Master TinyVLA, and you understand how all VLAs work. The rest is just compute.

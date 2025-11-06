@@ -1,10 +1,10 @@
 # TinyVLA: Fast-Iteration Vision-Language-Action Model
 
-A minimal (~25M parameter) Vision-Language-Action model designed for **rapid experimentation** on laptops/Colab with limited compute. Architecturally similar to SmolVLA but 18x smaller for 20x faster training.
+A minimal (~13M parameter) Vision-Language-Action model designed for **rapid experimentation** on laptops/Colab with limited compute. Architecturally similar to SmolVLA but ~35x smaller for ultra-fast training.
 
 ## 🎯 Design Goals
 
-- **Fast iteration**: Train in <10-20 minutes on a laptop (tested with an RTX 3070 GPU) or free Colab
+- **Fast iteration**: Train in 1-2 minutes on a laptop (tested with an RTX 3070 GPU) or free Colab
 - **Similar architecture to SOTA**: Uses ViT + Transformer decoder (like SmolVLA/OpenVLA)
 - **Easy to scale**: Same code structure as larger VLAs - just change config
 - **Educational**: Clear, documented code for learning VLA fundamentals
@@ -14,17 +14,17 @@ A minimal (~25M parameter) Vision-Language-Action model designed for **rapid exp
 ## 📊 Model Architecture
 
 ```
-TinyVLA (~25M parameters)
-├── Vision Encoder: TinyViT (~5M params)
+TinyVLA (~13M parameters)
+├── Vision Encoder: TinyViT (~1.8M params)
 │   ├── Patch embedding (8x8 patches)
 │   ├── 4 transformer layers
 │   └── 3 attention heads
 ├── Vision-Language Projection (~0.1M params)
-├── Language Model: TinyTransformer (~15M params)
-│   ├── Token + position embeddings
+├── Language Model: TinyTransformer (~11M params)
+│   ├── Token + position embeddings (7.8M for vocab)
 │   ├── 4 transformer layers
 │   └── 4 attention heads
-└── Action Head: MLP (~0.05M params)
+└── Action Head: MLP (~0.03M params)
     └── Predicts continuous actions (dx, dy)
 ```
 
@@ -73,7 +73,7 @@ python test_setup.py
 uv run python test_setup.py
 ```
 
-### Training (10-20 minutes)
+### Training (1-2 minutes)
 
 ```bash
 # Train with default config
@@ -87,10 +87,10 @@ tensorboard --logdir=logs
 ```
 
 **Expected results (on a laptop with an RTX 3070):**
-- Training time: ~15 minutes (20 epochs)
+- Training time: ~1-2 minutes (20 epochs)
 - Final val L2 error: ~0.05-0.10
 - GPU memory: ~2-3 GB
-- Training speed: ~200 samples/sec
+- Training speed: ~1000 samples/sec
 
 ### Inference & Evaluation
 
@@ -187,8 +187,7 @@ config = {
 
 | Model | Parameters | Training Time (RTX 3070) | Val L2 Error |
 |-------|-----------|-------------------------|--------------|
-| TinyVLA | 25M | ~15 min | 0.05-0.10 |
-| TinyVLA (half layers) | 15M | ~8 min | 0.08-0.15 |
+| TinyVLA | 13M | ~1-2 min | 0.05-0.10 |
 | MediumVLA | 100M | ~1.5 hrs | 0.02-0.05 |
 | SmolVLA | 450M | ~5 hrs | 0.01-0.03 |
 
@@ -208,22 +207,22 @@ Once you've validated your approach on the toy problem, scale up:
 - Learned vision-language fusion
 - Direct action prediction
 
-> **📖 For detailed scaling path (25M → 7B) and code examples, see [ARCHITECTURE.md](ARCHITECTURE.md)**
+> **📖 For detailed scaling path (13M → 7B) and code examples, see [ARCHITECTURE.md](ARCHITECTURE.md)**
 
 ## 💡 Learning Tips
 
 ### Quick experiments to try:
 
-1. **Architecture ablations** (~5 min each):
+1. **Architecture ablations** (~30 sec to 1 min each):
    - Remove vision encoder → see how much vision matters
    - Remove language model → test visual-only policy
    - Try different fusion strategies (concat vs. add vs. cross-attention)
 
-2. **Data efficiency** (~10 min each):
+2. **Data efficiency** (~1-2 min each):
    - Train on 1k, 2k, 4k, 8k samples
    - Plot learning curves
 
-3. **Generalization** (~15 min):
+3. **Generalization** (~2-3 min):
    - Train on 3 colors, test on 4th color
    - Train on simple instructions, test on complex ones
 
