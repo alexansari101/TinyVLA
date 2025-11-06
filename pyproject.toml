@@ -1,0 +1,34 @@
+[project]
+name = "tiny-vla"
+version = "0.1.0"
+description = "A minimal (~25M parameter) Vision-Language-Action model for rapid experimentation"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "TinyVLA Contributors"}
+]
+keywords = ["vision-language-action", "robotics", "machine-learning", "vla", "multimodal"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "torch~=2.9.0",
+    "torchvision~=0.24.0",
+    "transformers~=4.57.1",
+    "numpy~=2.3.4",
+    "pillow~=12.0.0",
+    "matplotlib~=3.10.7",
+    "tqdm~=4.67.1",
+    "tensorboard~=2.20.0",
+]
+
+[tool.uv]
+dev-dependencies = []

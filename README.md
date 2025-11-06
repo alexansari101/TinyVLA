@@ -38,13 +38,28 @@ TinyVLA (~25M parameters)
 
 ### Installation
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
+**Option 1: Using `uv` (recommended - 10-100x faster)**
 
-# Or with conda
-conda create -n tiny_vla python=3.9
-conda activate tiny_vla
+```bash
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment and install dependencies (auto-detects Python 3.11 from .python-version)
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install the project and dependencies
+uv pip install -e .
+```
+
+**Option 2: Using `pip` (traditional)**
+
+```bash
+# Create virtual environment with Python 3.11+
+python3.11 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
@@ -53,6 +68,9 @@ pip install -r requirements.txt
 ```bash
 # Test environment and estimate training time
 python test_setup.py
+
+# Or with uv
+uv run python test_setup.py
 ```
 
 ### Training (10-20 minutes)
@@ -60,6 +78,9 @@ python test_setup.py
 ```bash
 # Train with default config
 python train_tiny_vla.py
+
+# Or with uv (runs in the project's virtual environment)
+uv run python train_tiny_vla.py
 
 # Monitor with tensorboard
 tensorboard --logdir=logs

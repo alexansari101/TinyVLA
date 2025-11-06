@@ -13,6 +13,15 @@ TinyVLA is a minimal (~25M parameter) Vision-Language-Action model designed for 
 - **Easy to scale**: Same code structure as larger VLAs - just change config
 - **Educational**: Clear, documented code for learning VLA fundamentals
 
+## Setup
+
+Uses `uv` for package management (Python 3.11+ required):
+```bash
+uv venv && source .venv/bin/activate && uv pip install -e .
+```
+
+Alternative with pip: `python3.11 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+
 ## Common Commands
 
 ### Training

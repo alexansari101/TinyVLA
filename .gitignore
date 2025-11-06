@@ -3,8 +3,32 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Environments
+# Virtual Environments
 .env
 .venv
 env/
 venv/
+
+# UV
+.python-version.bak
+
+# Training artifacts
+checkpoints/
+logs/
+runs/
+
+# Visualizations and outputs
+*.png
+*.jpg
+*.gif
+
+# Model files
+*.pt
+*.pth
+*.ckpt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
