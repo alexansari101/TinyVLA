@@ -1,6 +1,6 @@
 """
 TinyVLA: Minimal Vision-Language-Action model
-Architecture mirrors SmolVLA but with ~13M parameters for ultra-fast iteration
+Architecture mirrors SmolVLA but scaled down for ultra-fast iteration
 """
 
 import torch
@@ -13,7 +13,7 @@ import math
 class TinyViT(nn.Module):
     """
     Tiny Vision Transformer encoder (similar to SigLip/ViT but smaller)
-    ~1.8M parameters
+    Default min config: ~1.8M parameters
     """
     def __init__(
         self,
@@ -108,7 +108,7 @@ class TransformerBlock(nn.Module):
 class TinyLanguageModel(nn.Module):
     """
     Tiny transformer decoder for language processing
-    ~11M parameters (much smaller than Phi-2's 2.7B)
+    Default min config: ~11M parameters (much smaller than Phi-2's 2.7B)
     """
     def __init__(
         self,
@@ -163,7 +163,7 @@ class TinyLanguageModel(nn.Module):
 class TinyVLA(nn.Module):
     """
     Tiny Vision-Language-Action model
-    Total: ~13M parameters for ultra-fast iteration
+    Default min config: ~13M parameters for ultra-fast iteration
     
     Architecture (similar to SmolVLA):
     1. Vision encoder (TinyViT) - encodes images

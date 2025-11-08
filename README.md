@@ -1,10 +1,10 @@
 # TinyVLA: Fast-Iteration Vision-Language-Action Model
 
-A minimal (~13M parameter) Vision-Language-Action model designed for **rapid experimentation** on laptops/Colab with limited compute. Architecturally similar to SmolVLA but ~35x smaller for ultra-fast training.
+A minimal Vision-Language-Action model designed for **rapid experimentation** on laptops/Colab with limited compute. The minimal variant (~13M parameters) is architecturally similar to SmolVLA but ~35x smaller for ultra-fast training.
 
 ## 🎯 Design Goals
 
-- **Fast iteration**: Train in 1-2 minutes on a laptop (tested with an RTX 3070 GPU) or free Colab
+- **Fast iteration**: Train in 1-2 minutes on a laptop (minimal variant on RTX 3070 GPU) or free Colab
 - **Similar architecture to SOTA**: Uses ViT + Transformer decoder (like SmolVLA/OpenVLA)
 - **Easy to scale**: Same code structure as larger VLAs - just change config
 - **Educational**: Clear, documented code for learning VLA fundamentals
@@ -14,7 +14,7 @@ A minimal (~13M parameter) Vision-Language-Action model designed for **rapid exp
 ## 📊 Model Architecture
 
 ```
-TinyVLA (~13M parameters)
+TinyVLA Minimal Variant (~13M parameters)
 ├── Vision Encoder: TinyViT (~1.8M params)
 │   ├── Patch embedding (8x8 patches)
 │   ├── 4 transformer layers
@@ -73,7 +73,7 @@ python test_setup.py
 uv run python test_setup.py
 ```
 
-### Training (1-2 minutes)
+### Training (1-2 minutes for minimal variant)
 
 ```bash
 # Train with default config
@@ -86,7 +86,7 @@ uv run python train_tiny_vla.py
 tensorboard --logdir=logs
 ```
 
-**Expected results (on a laptop with an RTX 3070):**
+**Expected results for minimal variant (on a laptop with an RTX 3070):**
 - Training time: ~1-2 minutes (20 epochs)
 - Final val L2 error: ~0.05-0.10
 - GPU memory: ~2-3 GB
@@ -105,7 +105,7 @@ python inference_tiny_vla.py --visualize
 python inference_tiny_vla.py --evaluate --num-samples 1000
 ```
 
-## 🎮 Toy Problem: BlockPush
+## 🎮 Example Dataset: BlockPush (Toy Problem)
 
 **Environment:**
 - 64x64 top-down view of colored blocks on a grid
@@ -149,7 +149,7 @@ This would create a ~450M parameter model (like SmolVLA).
 
 ### Using Your Own Dataset
 
-Replace `BlockPushDataset` with your own:
+Replace the included `BlockPushDataset` example with your own:
 
 ```python
 class YourDataset(Dataset):
@@ -183,14 +183,6 @@ config = {
 }
 ```
 
-## 📈 Performance Benchmarks
-
-| Model | Parameters | Training Time (RTX 3070) | Val L2 Error |
-|-------|-----------|-------------------------|--------------|
-| TinyVLA | 13M | ~1-2 min | 0.05-0.10 |
-| MediumVLA | 100M | ~1.5 hrs | 0.02-0.05 |
-| SmolVLA | 450M | ~5 hrs | 0.01-0.03 |
-
 ## 🔬 Extending to Real Robotics
 
 Once you've validated your approach on the toy problem, scale up:
@@ -207,7 +199,7 @@ Once you've validated your approach on the toy problem, scale up:
 - Learned vision-language fusion
 - Direct action prediction
 
-> **📖 For detailed scaling path (13M → 7B) and code examples, see [ARCHITECTURE.md](ARCHITECTURE.md)**
+> **📖 For detailed scaling path and code examples, see [ARCHITECTURE.md](ARCHITECTURE.md)**
 
 ## 💡 Learning Tips
 

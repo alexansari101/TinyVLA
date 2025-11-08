@@ -6,8 +6,8 @@ This document shows how TinyVLA's architecture relates to larger, production VLA
 
 ## Architecture Comparison Table
 
-| Component | TinyVLA | SmolVLA | OpenVLA | RT-2 |
-|-----------|---------|---------|---------|------|
+| Component | TinyVLA (Minimal Variant) | SmolVLA | OpenVLA | RT-2 |
+|-----------|---------------------------|---------|---------|------|
 | **Total Parameters** | 13M | 450M | 7B | 55B |
 | **Vision Encoder** | TinyViT (4 layers) | SigLip (12 layers) | SigLip-Large | PaLI-X ViT |
 | **Vision Dim** | 192 | 384 | 1024 | 2048 |
@@ -17,8 +17,7 @@ This document shows how TinyVLA's architecture relates to larger, production VLA
 | **Language Layers** | 4 | 32 | 32 | 48 |
 | **Fusion Method** | Pooling + Add | Cross-Attention | Cross-Attention | Cross-Attention |
 | **Action Head** | 2-layer MLP | 3-layer MLP | 3-layer MLP | 4-layer MLP |
-| **Training Time (RTX 3070)** | 1-2 min | 5 hours | N/A | N/A |
-| **GPU Memory** | 2-3 GB | 12-16 GB | 40+ GB | 80+ GB |
+| **GPU Memory (Est.)** | 2-3 GB | 12-16 GB | 40+ GB | 80+ GB |
 | **Typical Use Case** | Learning/Prototyping | Research/Fine-tuning | Production | Large-scale deployment |
 
 ## Architectural Patterns (Shared Across All VLAs)
@@ -58,13 +57,13 @@ Vision Features + Language Features → Fusion → Action Prediction
 
 ## Scaling Path: From TinyVLA to Production
 
-### Stage 1: TinyVLA (13M) - **You are here**
+### Stage 1: TinyVLA Minimal Variant (13M) - **You are here**
 ```python
 vision_dim=192, vision_layers=4
 lang_dim=256, lang_layers=4
 ```
 - **Purpose**: Learn VLA basics, rapid iteration
-- **Training**: 1-2 minutes
+- **Training**: 1-2 minutes (on BlockPush example dataset, RTX 3070)
 - **Hardware**: Single GPU (RTX 3070)
 
 ### Stage 2: MediumVLA (100M)
@@ -73,7 +72,6 @@ vision_dim=384, vision_layers=6
 lang_dim=512, lang_layers=8
 ```
 - **Purpose**: Test on real robot data
-- **Training**: 1-2 hours
 - **Hardware**: Single GPU (RTX 3090/4090)
 
 ### Stage 3: SmolVLA-like (450M)
@@ -83,7 +81,6 @@ lang_dim=2560, lang_layers=32     # Phi-2
 + Cross-attention fusion
 ```
 - **Purpose**: Research-grade performance
-- **Training**: 5-10 hours (with LoRA: 1-2 hours)
 - **Hardware**: A100 40GB or 2x RTX 4090
 
 ### Stage 4: OpenVLA-like (7B)
@@ -93,8 +90,7 @@ lang_dim=4096, lang_layers=32      # Llama-2-7B
 + Cross-attention + Advanced fusion
 ```
 - **Purpose**: Production deployment
-- **Training**: Days (requires distributed training)
-- **Hardware**: Multiple A100s
+- **Hardware**: Multiple A100s (requires distributed training)
 
 ## Key Differences Explained
 
@@ -256,7 +252,7 @@ This proves the model is doing vision-language fusion correctly.
 | **Training** | Same paradigm (behavioral cloning) |
 | **Scaling** | Change hyperparameters, not code structure |
 | **Learning** | TinyVLA teaches you production VLA concepts |
-| **Speed** | 13M = 1-2 min, 450M = 5 hrs, 7B = days |
+| **Speed** | Training time scales with model size and dataset complexity |
 | **Performance** | Larger = better, but diminishing returns |
 
 **Bottom line**: Master TinyVLA, and you understand how all VLAs work. The rest is just compute.

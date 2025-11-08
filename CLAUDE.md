@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TinyVLA is a minimal (~13M parameter) Vision-Language-Action model designed for rapid experimentation on limited compute. It's architecturally similar to state-of-the-art VLA models (SmolVLA, OpenVLA) but ~35x smaller for ultra-fast training iterations.
+TinyVLA is a minimal Vision-Language-Action model designed for rapid experimentation on limited compute. The minimal variant (~13M parameters) is architecturally similar to state-of-the-art VLA models (SmolVLA, OpenVLA) but ~35x smaller for ultra-fast training iterations.
 
 ## Design Goals
 
-- **Fast iteration**: Train in 1-2 minutes on RTX 3070 or free Colab
+- **Fast iteration**: Train in 1-2 minutes (minimal variant on RTX 3070 or free Colab)
 - **Similar architecture to SOTA**: Uses ViT + Transformer decoder (like SmolVLA/OpenVLA). Same architecture as production VLAs, just smaller to allow for rapid iteration.
 - **Easy to scale**: Same code structure as larger VLAs - just change config
 - **Educational**: Clear, documented code for learning VLA fundamentals
@@ -26,7 +26,7 @@ Alternative with pip: `python3.11 -m venv .venv && source .venv/bin/activate && 
 
 ### Training
 ```bash
-# Train with default config (1-2 min on RTX 3070)
+# Train with default config (minimal variant: 1-2 min on RTX 3070)
 python train_tiny_vla.py
 
 # Monitor training
@@ -56,7 +56,7 @@ python test_setup.py
 
 ### Dataset Visualization
 ```bash
-# Generate sample visualization (creates sample_visualization.png)
+# Generate sample visualization from included example dataset (creates sample_visualization.png)
 python -c "from tiny_vla_dataset import BlockPushDataset; d=BlockPushDataset(10); d.visualize_sample(0)"
 ```
 
@@ -94,7 +94,7 @@ This is deliberately simple for fast iteration. For production scaling, consider
 All hyperparameters are in `train_tiny_vla.py:232-256`. To scale up:
 
 ```python
-# TinyVLA (current): ~13M params, 1-2 min training
+# Minimal variant (default): ~13M params
 config['model'] = {
     'vision_embed_dim': 192,
     'vision_layers': 4,
@@ -102,7 +102,7 @@ config['model'] = {
     'lang_layers': 4,
 }
 
-# MediumVLA: ~100M params, 1-2 hour training
+# MediumVLA: ~100M params
 config['model'] = {
     'vision_embed_dim': 384,
     'vision_layers': 6,
@@ -110,7 +110,7 @@ config['model'] = {
     'lang_layers': 8,
 }
 
-# SmolVLA-like: ~450M params, 5 hour training
+# SmolVLA-like: ~450M params
 config['model'] = {
     'vision_embed_dim': 768,
     'vision_layers': 12,
@@ -119,9 +119,9 @@ config['model'] = {
 }
 ```
 
-## Dataset: BlockPush Toy Problem
+## Dataset: BlockPush (Included Example Dataset)
 
-**Purpose**: Synthetic task that validates vision-language fusion works correctly.
+**Purpose**: Toy problem / synthetic task that validates vision-language fusion works correctly.
 
 **Structure** (`tiny_vla_dataset.py:13-153`):
 - Generates 64x64 images with 3-4 colored blocks on an 8x8 grid
@@ -151,7 +151,7 @@ config['model'] = {
 - Periodic checkpoints every 5 epochs → `checkpoints/checkpoint_epoch_X.pt`
 - Config saved to `checkpoints/config.json`
 
-**Expected Performance**:
+**Expected Performance** (minimal variant on BlockPush dataset):
 - Final validation L2 error: 0.05-0.10
 - Direction accuracy (cosine similarity > 0.8): >95%
 
@@ -208,7 +208,7 @@ for param in self.language_model.parameters():
     param.requires_grad = False
 ```
 
-This gives SmolVLA-like performance while maintaining ~2-3 min training time!
+This can give improved performance while maintaining fast training time!
 
 ### LoRA Fine-tuning for Large Models
 
@@ -264,7 +264,7 @@ To scale from toy problem to real robot deployment:
 
 1. **Vision**: Replace TinyViT with pretrained SigLip/CLIP (freeze or LoRA)
 2. **Language**: Replace custom model with Phi-2/Llama (freeze or LoRA)
-3. **Dataset**: Switch from BlockPush to Bridge, RT-1, or custom robot data
+3. **Dataset**: Switch from BlockPush example dataset to Bridge, RT-1, or custom robot data
 4. **Actions**: Extend to 7-DOF + gripper (change `action_dim`)
 5. **Fusion**: Upgrade to cross-attention for better multimodal reasoning
 6. **Training**: Use larger batch sizes, longer training (100+ epochs on real data)
