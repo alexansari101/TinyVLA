@@ -3,6 +3,12 @@ Training script for TinyVLA
 Fast iteration training loop with logging and validation
 """
 
+import os
+# Disable tokenizer parallelism to avoid fork warnings with DataLoader multiprocessing.
+# This has negligible impact on speed for short instructions (~5 tokens) with num_workers>0.
+# Only matters for: long documents (1000+ tokens), num_workers=0, or heavy preprocessing.
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
 import torch
 import torch.nn as nn
 import torch.optim as optim

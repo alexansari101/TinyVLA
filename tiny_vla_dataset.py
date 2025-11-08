@@ -47,9 +47,9 @@ class BlockPushDataset(Dataset):
         # Pre-generate all samples for consistency
         random.seed(seed)
         np.random.seed(seed)
-        self.samples = [self._generate_sample(i) for i in range(num_samples)]
+        self.samples = [self._generate_sample() for _ in range(num_samples)]
     
-    def _generate_sample(self, idx: int) -> Dict:
+    def _generate_sample(self) -> Dict:
         """Generate a single training sample"""
         # Randomly place blocks on grid
         grid_size = 8  # 8x8 grid within 64x64 image
