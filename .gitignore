@@ -21,6 +21,7 @@ runs/
 *.png
 *.jpg
 *.gif
+debug.md
 
 # Model files
 *.pt

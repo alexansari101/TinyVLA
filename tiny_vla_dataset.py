@@ -8,14 +8,17 @@ import torch
 from torch.utils.data import Dataset
 from PIL import Image, ImageDraw
 import random
+import logging
 from typing import Dict
+
+logger = logging.getLogger(__name__)
 
 class BlockPushDataset(Dataset):
     """
-    Toy dataset: Push colored blocks to target locations
+    Toy dataset: Push colored blocks toward other blocks
     - Image: 64x64 top-down view with colored blocks
-    - Language: "Push the [color] block [direction]"
-    - Action: (dx, dy) continuous displacement
+    - Language: "Push the [source_color] block toward the [target_color] block"
+    - Action: (dx, dy) normalized direction vector from source to target
     """
     
     def __init__(
@@ -65,16 +68,43 @@ class BlockPushDataset(Dataset):
             pos = available_positions.pop()
             block_positions[color] = pos
         
-        # Choose random target block and direction
-        target_color = random.choice(used_colors)
-        target_direction = random.choice(list(self.directions.keys()))
-        
+        # Choose two different colored blocks (source and target)
+        # Ensure we have at least 2 blocks for this task
+        if len(used_colors) < 2:
+            # If we only have 1 block, add another
+            remaining_colors = [c for c in self.color_names if c not in used_colors]
+            if remaining_colors:
+                additional_color = random.choice(remaining_colors)
+                pos = available_positions.pop() if available_positions else (0, 0)
+                block_positions[additional_color] = pos
+                used_colors.append(additional_color)
+
+        # Pick source and target blocks (must be different)
+        source_color, target_color = random.sample(used_colors, 2)
+
         # Create instruction
-        instruction = f"Push the {target_color} block {target_direction}"
-        
-        # Calculate action (normalized displacement)
-        dx, dy = self.directions[target_direction]
-        action = np.array([dx, dy], dtype=np.float32)
+        instruction = f"Push the {source_color} block toward the {target_color} block"
+
+        # Calculate action as normalized direction vector from source to target
+        source_pos = np.array(block_positions[source_color], dtype=np.float32)
+        target_pos = np.array(block_positions[target_color], dtype=np.float32)
+
+        # Direction vector: target - source
+        direction_vector = target_pos - source_pos
+
+        # Normalize to unit vector
+        norm = np.linalg.norm(direction_vector)
+        if norm > 0:
+            action = direction_vector / norm
+        else:
+            # This should never happen since blocks are placed at unique positions
+            logger.warning(
+                "BUG: Source and target blocks at same position! "
+                f"{source_color}={source_pos}, {target_color}={target_pos}"
+            )
+            action = np.array([0.0, 0.0], dtype=np.float32)
+
+        action = action.astype(np.float32)
         
         # Create image
         image = self._render_scene(block_positions, grid_size)
@@ -84,8 +114,8 @@ class BlockPushDataset(Dataset):
             'instruction': instruction,
             'action': action,
             'block_positions': block_positions,
-            'target_color': target_color,
-            'target_direction': target_direction
+            'source_color': source_color,
+            'target_color': target_color
         }
     
     def _render_scene(self, block_positions: Dict, grid_size: int) -> np.ndarray:
@@ -107,12 +137,11 @@ class BlockPushDataset(Dataset):
             y = gy * cell_size
             color = self.colors[color_name]
             
-            # Draw block as filled rectangle with border
+            # Draw block as solid colored rectangle (no border)
             draw.rectangle(
-                [x + 2, y + 2, x + cell_size - 2, y + cell_size - 2],
+                [x, y, x + cell_size - 1, y + cell_size - 1],
                 fill=color,
-                outline=(0, 0, 0),
-                width=2
+                outline=None
             )
         
         # Convert to numpy array
@@ -139,12 +168,38 @@ class BlockPushDataset(Dataset):
     def visualize_sample(self, idx: int):
         """Visualize a sample for debugging"""
         import matplotlib.pyplot as plt
-        
+        from matplotlib.patches import FancyArrowPatch
+
         sample = self.samples[idx]
-        
+
         _, ax = plt.subplots(1, 1, figsize=(6, 6))
         ax.imshow(sample['image'])
-        ax.set_title(f"Instruction: {sample['instruction']}\nAction: {sample['action']}")
+
+        # Draw arrow from source to target block
+        positions = sample['block_positions']
+        source_color = sample['source_color']
+        target_color = sample['target_color']
+
+        cell_size = self.image_size / 8  # grid_size = 8
+
+        # Get center positions of blocks in pixel coordinates
+        source_gx, source_gy = positions[source_color]
+        target_gx, target_gy = positions[target_color]
+
+        source_x = source_gx * cell_size + cell_size / 2
+        source_y = source_gy * cell_size + cell_size / 2
+        target_x = target_gx * cell_size + cell_size / 2
+        target_y = target_gy * cell_size + cell_size / 2
+
+        # Draw arrow
+        arrow = FancyArrowPatch(
+            (source_x, source_y), (target_x, target_y),
+            arrowstyle='->', mutation_scale=20, linewidth=2.5,
+            color='black', alpha=0.7, zorder=10
+        )
+        ax.add_patch(arrow)
+
+        ax.set_title(f"Instruction: {sample['instruction']}\nAction: [{sample['action'][0]:.3f}, {sample['action'][1]:.3f}]")
         ax.axis('off')
         plt.tight_layout()
         plt.savefig('sample_visualization.png', dpi=150, bbox_inches='tight')

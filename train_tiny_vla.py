@@ -11,6 +11,7 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 import time
@@ -53,9 +54,19 @@ class TinyVLATrainer:
         # Loss function (MSE for continuous actions)
         self.criterion = nn.MSELoss()
         
-        # Learning rate scheduler with warmup
+        # # Learning rate scheduler with warmup
+        # self.warmup_steps = warmup_steps
+        # self.base_lr = lr
+
         self.warmup_steps = warmup_steps
-        self.base_lr = lr
+        
+        def lr_lambda(step):
+            if step < self.warmup_steps:
+                # Add 1 to step due to 0-indexing
+                return float(step + 1) / float(self.warmup_steps)
+            return 1.0 # Full base_lr after warmup
+
+        self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
         
         # Logging
         self.writer = SummaryWriter(log_dir)
@@ -65,11 +76,11 @@ class TinyVLATrainer:
         self.global_step = 0
         self.epoch = 0
         
-    def get_lr(self):
-        """Learning rate with linear warmup"""
-        if self.global_step < self.warmup_steps:
-            return self.base_lr * (self.global_step / self.warmup_steps)
-        return self.base_lr
+    # def get_lr(self):
+    #     """Learning rate with linear warmup"""
+    #     if self.global_step < self.warmup_steps:
+    #         return self.base_lr * (self.global_step / self.warmup_steps)
+    #     return self.base_lr
     
     def train_epoch(self):
         """Train for one epoch"""
@@ -93,6 +104,7 @@ class TinyVLATrainer:
             
             # Compute loss
             loss = self.criterion(actions_pred, actions_gt)
+            # loss = (1 - F.cosine_similarity(actions_pred, actions_gt)).mean()
             
             # Backward pass
             self.optimizer.zero_grad()
@@ -103,25 +115,28 @@ class TinyVLATrainer:
             
             self.optimizer.step()
             
-            # Update learning rate with warmup
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = self.get_lr()
+            # # Update learning rate with warmup
+            # for param_group in self.optimizer.param_groups:
+            #     param_group['lr'] = self.get_lr()
+            self.scheduler.step()
             
             # Logging
             total_loss += loss.item()
             num_batches += 1
             self.global_step += 1
+
+            current_lr = self.optimizer.param_groups[0]['lr']
             
             # Update progress bar
             pbar.set_postfix({
                 'loss': f'{loss.item():.4f}',
-                'lr': f'{self.get_lr():.6f}'
+                'lr': f'{current_lr:.6f}'
             })
             
             # Log to tensorboard
             if self.global_step % 10 == 0:
                 self.writer.add_scalar('train/loss', loss.item(), self.global_step)
-                self.writer.add_scalar('train/lr', self.get_lr(), self.global_step)
+                self.writer.add_scalar('train/lr', current_lr, self.global_step)
         
         avg_loss = total_loss / num_batches
         return avg_loss
@@ -148,6 +163,8 @@ class TinyVLATrainer:
             
             # Compute loss
             loss = self.criterion(actions_pred, actions_gt)
+            # loss = (1 - F.cosine_similarity(actions_pred, actions_gt)).mean()
+
             total_loss += loss.item()
             
             # Compute L2 error
@@ -240,8 +257,8 @@ def main():
             'image_size': 64,
             'patch_size': 8,
             'vision_embed_dim': 192,
-            'vision_layers': 4,
-            'vision_heads': 3,
+            'vision_layers': 8, # 4
+            'vision_heads': 6, # 3
             'lang_embed_dim': 256,
             'lang_layers': 4,
             'lang_heads': 4,

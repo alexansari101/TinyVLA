@@ -9,6 +9,63 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModel
 import math
 
+def get_2d_sinusoidal_pos_embed(embed_dim, grid_size):
+    """
+    Generates 2D sinusoidal position embeddings (standard for ViT and MAE)
+    using torch.meshgrid for a cleaner implementation.
+    
+    Args:
+        embed_dim (int): Total embedding dimension (must be divisible by 4)
+        grid_size (int): The grid size (e.g., 8 for 8x8 patches)
+    
+    Returns:
+        (torch.Tensor): (grid_size*grid_size, embed_dim)
+    """
+    if embed_dim % 4 != 0:
+        raise ValueError(
+            f"Embedding dimension {embed_dim} must be divisible by 4 "
+            "to be split evenly for x/y sin/cos components."
+        )
+
+    # Half for y-coords, half for x-coords
+    embed_dim_half = embed_dim // 2
+    
+    # Half of that for sin, half for cos
+    channels = embed_dim_half // 2  # e.g., 192 -> 96 -> 48
+
+    # (channels,)
+    # Create the inverse frequency vector
+    inv_freq = 1.0 / (10000 ** (torch.arange(0, channels, dtype=torch.float32) / channels))
+
+    # (grid_size, grid_size)
+    # Create 2D coordinate grids
+    # 'ij' indexing: pos_y varies with dim 0, pos_x varies with dim 1
+    pos_y, pos_x = torch.meshgrid(
+        torch.arange(grid_size, dtype=torch.float32),
+        torch.arange(grid_size, dtype=torch.float32),
+        indexing='ij'
+    )
+    
+    # (grid_size, grid_size, channels)
+    # Apply frequencies to coordinates
+    pos_x_emb = torch.einsum('ij,k->ijk', pos_x, inv_freq)
+    pos_y_emb = torch.einsum('ij,k->ijk', pos_y, inv_freq)
+
+    # (grid_size, grid_size, embed_dim_half)
+    # Apply sin and cos
+    pos_x_emb = torch.cat([torch.sin(pos_x_emb), torch.cos(pos_x_emb)], dim=-1)
+    pos_y_emb = torch.cat([torch.sin(pos_y_emb), torch.cos(pos_y_emb)], dim=-1)
+
+    # (grid_size, grid_size, embed_dim)
+    # Concatenate the y and x components
+    pos_emb_2d = torch.cat([pos_y_emb, pos_x_emb], dim=-1)
+
+    # (num_patches, embed_dim)
+    # Flatten to (grid_size*grid_size, embed_dim)
+    pos_emb_1d = pos_emb_2d.reshape(grid_size * grid_size, embed_dim)
+    
+    return pos_emb_1d
+
 
 class TinyViT(nn.Module):
     """
@@ -38,8 +95,17 @@ class TinyViT(nn.Module):
             kernel_size=patch_size, stride=patch_size
         )
         
-        # Positional embedding
-        self.pos_embed = nn.Parameter(torch.randn(1, self.num_patches + 1, embed_dim) * 0.02)
+        # Keep a learnable position for the [CLS] token
+        self.pos_embed_cls = nn.Parameter(torch.randn(1, 1, embed_dim) * 0.02)
+        
+        # Create fixed 2D sinusoidal embeddings for patches
+        grid_size = image_size // patch_size
+        pos_embed_patches = get_2d_sinusoidal_pos_embed(embed_dim, grid_size) # (num_patches, embed_dim)
+        
+        # Register as a buffer (not a parameter) so it's not trained
+        # but moves to the GPU with .to(device)
+        self.register_buffer('pos_embed_patches', pos_embed_patches.unsqueeze(0), persistent=False)
+
         self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim) * 0.02)
         
         # Transformer encoder blocks
@@ -66,13 +132,20 @@ class TinyViT(nn.Module):
         # Add CLS token
         cls_tokens = self.cls_token.expand(B, -1, -1)
         x = torch.cat([cls_tokens, x], dim=1)
+
+        # Explicitly assign to a typed local variable to help the linter
+        patch_pos_embed: torch.Tensor = self.pos_embed_patches
+
+        pos_embed = torch.cat([
+            self.pos_embed_cls.expand(B, -1, -1), 
+            patch_pos_embed.expand(B, -1, -1)
+        ], dim=1)
         
-        # Add positional embedding
-        x = x + self.pos_embed
+        x = x + pos_embed
         
         # Transformer blocks
         for block in self.blocks:
-            x = block(x)
+            x = block(x, key_padding_mask=None, attn_mask=None)
         
         x = self.norm(x)
         
@@ -97,9 +170,11 @@ class TransformerBlock(nn.Module):
             nn.Dropout(dropout)
         )
         
-    def forward(self, x):
+    def forward(self, x, key_padding_mask=None, attn_mask=None):
         # Self-attention with residual
-        x = x + self.attn(self.norm1(x), self.norm1(x), self.norm1(x))[0]
+        x = x + self.attn(self.norm1(x), self.norm1(x), self.norm1(x),
+                          key_padding_mask=key_padding_mask,
+                          attn_mask=attn_mask)[0]
         # MLP with residual
         x = x + self.mlp(self.norm2(x))
         return x
@@ -107,7 +182,7 @@ class TransformerBlock(nn.Module):
 
 class TinyLanguageModel(nn.Module):
     """
-    Tiny transformer decoder for language processing
+    Tiny transformer encoder for language processing
     Default min config: ~11M parameters (much smaller than Phi-2's 2.7B)
     """
     def __init__(
@@ -145,6 +220,11 @@ class TinyLanguageModel(nn.Module):
             (B, seq_len, embed_dim)
         """
         B, seq_len = input_ids.shape
+
+        # Create the key_padding_mask (True for pad tokens, False for real tokens)
+        padding_mask = None
+        if attention_mask is not None:
+            padding_mask = (attention_mask == 0)
         
         # Token + position embeddings
         x = self.token_embed(input_ids)
@@ -153,7 +233,7 @@ class TinyLanguageModel(nn.Module):
         
         # Transformer blocks (we're using self-attention, not causal for simplicity)
         for block in self.blocks:
-            x = block(x)
+            x = block(x, key_padding_mask=padding_mask)
         
         x = self.norm(x)
         
@@ -198,12 +278,12 @@ class TinyVLA(nn.Module):
             dropout=dropout
         )
         
-        # Vision-to-language projection (like in SmolVLA)
-        self.vision_proj = nn.Sequential(
-            nn.Linear(vision_embed_dim, lang_embed_dim),
-            nn.GELU(),
-            nn.Linear(lang_embed_dim, lang_embed_dim)
-        )
+        # Vision-to-language projection (single layer to preserve color info)
+        self.vision_proj = nn.Linear(vision_embed_dim, lang_embed_dim)
+
+        self.vision_norm = nn.LayerNorm(lang_embed_dim)
+
+        self.fusion_output_norm = nn.LayerNorm(lang_embed_dim)
         
         # Tokenizer (using pretrained for convenience)
         if use_pretrained_tokenizer:
@@ -223,14 +303,23 @@ class TinyVLA(nn.Module):
             dropout=dropout
         )
         
-        # Action head (predicts continuous actions)
-        self.action_head = nn.Sequential(
-            nn.Linear(lang_embed_dim, lang_embed_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(lang_embed_dim // 2, action_dim)
+        self.fusion_attention = nn.MultiheadAttention(
+            embed_dim=lang_embed_dim, 
+            num_heads=lang_heads, 
+            dropout=dropout, 
+            batch_first=True
         )
-        
+
+        # # Action head (predicts continuous actions)
+        # self.action_head = nn.Sequential(
+        #     nn.Linear(lang_embed_dim, lang_embed_dim // 2),
+        #     nn.GELU(),
+        #     # nn.ReLU(),
+        #     # nn.Dropout(dropout),
+        #     nn.Linear(lang_embed_dim // 2, action_dim)
+        # )
+        self.action_head = nn.Linear(lang_embed_dim, action_dim)
+
         self.action_dim = action_dim
         
     def forward(self, images, input_ids, attention_mask=None):
@@ -242,25 +331,41 @@ class TinyVLA(nn.Module):
         Returns:
             action_pred: (B, action_dim)
         """
-        # Encode vision
-        vision_features = self.vision_encoder(images)  # (B, num_patches + 1, vision_dim)
-        
-        # Project vision features to language dimension
-        vision_features = self.vision_proj(vision_features)  # (B, num_patches + 1, lang_dim)
-        
-        # Encode language
-        lang_features = self.language_model(input_ids, attention_mask)  # (B, seq_len, lang_dim)
-        
-        # Fuse vision and language (simple concatenation + pooling)
-        # Alternative: cross-attention like SmolVLA, but this is simpler for toy problem
-        vision_pooled = vision_features[:, 0, :]  # Use CLS token (B, lang_dim)
-        lang_pooled = lang_features.mean(dim=1)    # Mean pooling (B, lang_dim)
-        
-        fused = vision_pooled + lang_pooled  # Simple fusion
-        
-        # Predict action
-        action_pred = self.action_head(fused)  # (B, action_dim)
-        
+        # 1. Encode vision - Get ALL patch tokens (B, num_patches+1, vision_dim)
+        vision_features = self.vision_encoder(images)
+
+        # 2. Encode language - Get the [CLS] token as the instruction summary
+        lang_features = self.language_model(input_ids, attention_mask)
+        lang_pooled = lang_features[:, 0, :]  # (B, lang_dim)
+
+        # 3. Project vision *patch* features to lang_dim (discarding vision [CLS])
+        # Note: We use vision_features[:, 1:, :] to skip the global [CLS] token
+        vision_patches = vision_features[:, 1:, :]  # (B, num_patches, vision_dim)
+        vision_patches_proj = self.vision_proj(vision_patches)  # (B, num_patches, lang_dim)
+        # We can still normalize the patches
+        vision_patches_norm = self.vision_norm(vision_patches_proj)
+
+        # 4. Fuse with Cross-Attention
+        # Query (Q) = What the instruction is asking for (lang_pooled)
+        # Key (K)   = What we see in the image (vision_patches_norm)
+        # Value (V) = What we see in the image (vision_patches_norm)
+
+        # We unsqueeze lang_pooled to (B, 1, lang_dim) to act as a single query
+        fused_features, _ = self.fusion_attention(
+            query=lang_pooled.unsqueeze(1),
+            key=vision_patches_norm,
+            value=vision_patches_norm
+        )
+
+        # Squeeze out the query dimension (B, 1, lang_dim) -> (B, lang_dim)
+        fused = fused_features.squeeze(1)
+
+        fused_norm = self.fusion_output_norm(fused)
+
+        # 5. Predict action from this spatially-aware fused representation
+        # (We skip the manual vision/lang weights for this simpler, more powerful fusion)
+        action_pred = self.action_head(fused_norm)
+
         return action_pred
     
     def count_parameters(self):
