@@ -360,7 +360,9 @@ class TinyVLA(nn.Module):
         # Squeeze out the query dimension (B, 1, lang_dim) -> (B, lang_dim)
         fused = fused_features.squeeze(1)
 
-        fused_norm = self.fusion_output_norm(fused)
+        fused_with_residual = lang_pooled + fused
+
+        fused_norm = self.fusion_output_norm(fused_with_residual)
 
         # 5. Predict action from this spatially-aware fused representation
         # (We skip the manual vision/lang weights for this simpler, more powerful fusion)

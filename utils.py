@@ -861,7 +861,12 @@ if __name__ == "__main__":
     dataset = None
     
     try:
-        model = create_tiny_vla()
+        import json
+        config_path = 'checkpoints/config.json'
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+
+        model = create_tiny_vla(config.get('model'))
     except Exception as e:
         print(f"ERROR: Could not create model: {e}")
         exit()
