@@ -257,8 +257,8 @@ def main():
             'image_size': 64,
             'patch_size': 8,
             'vision_embed_dim': 192,
-            'vision_layers': 8, # 4
-            'vision_heads': 6, # 3
+            'vision_layers': 4,
+            'vision_heads': 3,
             'lang_embed_dim': 256,
             'lang_layers': 4,
             'lang_heads': 4,

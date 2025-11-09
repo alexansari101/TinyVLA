@@ -7,7 +7,7 @@ import torch
 import matplotlib.pyplot as plt
 import numpy as np
 from tiny_vla_model import create_tiny_vla
-from tiny_vla_dataset import BlockPushDataset
+from tiny_vla_dataset import BlockFindDataset
 
 
 class TinyVLAInference:
@@ -84,7 +84,7 @@ class TinyVLAInference:
         Visualize model predictions on dataset samples
         
         Args:
-            dataset: BlockPushDataset
+            dataset: BlockFindDataset
             num_samples: number of samples to visualize
             save_path: path to save figure (optional)
         """
@@ -158,7 +158,7 @@ class TinyVLAInference:
         Evaluate model accuracy on dataset
         
         Args:
-            dataset: BlockPushDataset
+            dataset: BlockFindDataset
             num_samples: number of samples to evaluate
         Returns:
             dict with metrics
@@ -248,7 +248,7 @@ def main():
     
     # Create test dataset
     print("\nCreating test dataset...")
-    test_dataset = BlockPushDataset(num_samples=args.num_samples, seed=44)
+    test_dataset = BlockFindDataset(num_samples=args.num_samples, seed=44)
     
     # Visualize predictions
     if args.visualize:

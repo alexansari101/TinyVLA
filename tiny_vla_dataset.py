@@ -13,11 +13,11 @@ from typing import Dict
 
 logger = logging.getLogger(__name__)
 
-class BlockPushDataset(Dataset):
+class BlockFindDataset(Dataset):
     """
-    Toy dataset: Push colored blocks toward other blocks
+    Toy dataset: Find a specific colored block
     - Image: 64x64 top-down view with colored blocks
-    - Language: "Push the [source_color] block toward the [target_color] block"
+    - Language: "find the [target_color] block"
     - Action: (dx, dy) normalized direction vector from source to target
     """
     
@@ -62,31 +62,27 @@ class BlockPushDataset(Dataset):
         available_positions = [(i, j) for i in range(grid_size) for j in range(grid_size)]
         random.shuffle(available_positions)
         
-        used_colors = random.sample(self.color_names, min(self.num_blocks, len(self.color_names)))
+        # 1. We need exactly 'num_blocks' (e.g., 2) different colors
+        if self.num_blocks > len(self.color_names):
+             raise ValueError("num_blocks cannot be greater than available colors")
+             
+        used_colors = random.sample(self.color_names, self.num_blocks)
         
+        # 2. Place the blocks
         for color in used_colors:
             pos = available_positions.pop()
             block_positions[color] = pos
         
-        # Choose two different colored blocks (source and target)
-        # Ensure we have at least 2 blocks for this task
-        if len(used_colors) < 2:
-            # If we only have 1 block, add another
-            remaining_colors = [c for c in self.color_names if c not in used_colors]
-            if remaining_colors:
-                additional_color = random.choice(remaining_colors)
-                pos = available_positions.pop() if available_positions else (0, 0)
-                block_positions[additional_color] = pos
-                used_colors.append(additional_color)
+        # 3. Pick one of the placed blocks as the target
+        target_color = random.choice(used_colors)
 
-        # Pick source and target blocks (must be different)
-        source_color, target_color = random.sample(used_colors, 2)
+        # 4. Create a DYNAMIC instruction
+        instruction = f"find the {target_color} block"
 
-        # Create instruction
-        instruction = f"Push the {source_color} block toward the {target_color} block"
-
-        # Calculate action as normalized direction vector from source to target
-        source_pos = np.array(block_positions[source_color], dtype=np.float32)
+        # 5. Calculate action as normalized direction vector from CENTER to TARGET
+        
+        # Source is the center of the grid
+        source_pos = np.array([grid_size / 2.0, grid_size / 2.0], dtype=np.float32) 
         target_pos = np.array(block_positions[target_color], dtype=np.float32)
 
         # Direction vector: target - source
@@ -97,11 +93,7 @@ class BlockPushDataset(Dataset):
         if norm > 0:
             action = direction_vector / norm
         else:
-            # This should never happen since blocks are placed at unique positions
-            logger.warning(
-                "BUG: Source and target blocks at same position! "
-                f"{source_color}={source_pos}, {target_color}={target_pos}"
-            )
+            # Block is at the center, action is (0, 0)
             action = np.array([0.0, 0.0], dtype=np.float32)
 
         action = action.astype(np.float32)
@@ -114,7 +106,7 @@ class BlockPushDataset(Dataset):
             'instruction': instruction,
             'action': action,
             'block_positions': block_positions,
-            'source_color': source_color,
+            'source_color': 'center', # Source is the center
             'target_color': target_color
         }
     
@@ -175,19 +167,19 @@ class BlockPushDataset(Dataset):
         _, ax = plt.subplots(1, 1, figsize=(6, 6))
         ax.imshow(sample['image'])
 
-        # Draw arrow from source to target block
+        # Draw arrow from center to target block
         positions = sample['block_positions']
-        source_color = sample['source_color']
+        # source_color = sample['source_color'] # This is just 'center' now
         target_color = sample['target_color']
 
         cell_size = self.image_size / 8  # grid_size = 8
 
-        # Get center positions of blocks in pixel coordinates
-        source_gx, source_gy = positions[source_color]
-        target_gx, target_gy = positions[target_color]
+        # Source is the center of the image
+        source_x = self.image_size / 2.0
+        source_y = self.image_size / 2.0
 
-        source_x = source_gx * cell_size + cell_size / 2
-        source_y = source_gy * cell_size + cell_size / 2
+        # Get center position of target block in pixel coordinates
+        target_gx, target_gy = positions[target_color]
         target_x = target_gx * cell_size + cell_size / 2
         target_y = target_gy * cell_size + cell_size / 2
 
@@ -215,9 +207,9 @@ def create_dataloaders(
     num_workers: int = 4
 ):
     """Create train/val/test dataloaders"""
-    train_dataset = BlockPushDataset(num_samples=train_size, seed=42)
-    val_dataset = BlockPushDataset(num_samples=val_size, seed=43)
-    test_dataset = BlockPushDataset(num_samples=test_size, seed=44)
+    train_dataset = BlockFindDataset(num_samples=train_size, seed=42)
+    val_dataset = BlockFindDataset(num_samples=val_size, seed=43)
+    test_dataset = BlockFindDataset(num_samples=test_size, seed=44)
     
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -248,8 +240,8 @@ def create_dataloaders(
 
 if __name__ == "__main__":
     # Test dataset generation
-    print("Creating BlockPush dataset...")
-    dataset = BlockPushDataset(num_samples=100)
+    print("Creating BlockFindDataset...")
+    dataset = BlockFindDataset(num_samples=100)
     
     print(f"Dataset size: {len(dataset)}")
     print("\nSample 0:")

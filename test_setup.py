@@ -13,8 +13,8 @@ print("=" * 60)
 # Test 1: Import all modules
 print("\n[1/5] Testing imports...")
 try:
-    from tiny_vla_dataset import BlockPushDataset, create_dataloaders
-    from tiny_vla_model import TinyVLA, create_tiny_vla
+    from tiny_vla_dataset import BlockFindDataset
+    from tiny_vla_model import create_tiny_vla
     print("✓ All modules imported successfully")
 except Exception as e:
     print(f"✗ Import failed: {e}")
@@ -33,7 +33,7 @@ else:
 # Test 3: Create dataset
 print("\n[3/5] Creating test dataset...")
 try:
-    dataset = BlockPushDataset(num_samples=10)
+    dataset = BlockFindDataset(num_samples=10)
     sample = dataset[0]
     print("✓ Dataset created successfully")
     print(f"  Sample image shape: {sample['image'].shape}")
@@ -62,8 +62,8 @@ try:
     batch_size = 2
     images = torch.randn(batch_size, 3, 64, 64).to(device)
     instructions = [
-        "Push the red block up",
-        "Move blue block left"
+        "Find the red block",
+        "Find the blue block"
     ]
     
     with torch.no_grad():
@@ -91,7 +91,7 @@ try:
     for i in range(5):
         batch = {
             'image': torch.randn(64, 3, 64, 64).to(device),
-            'instruction': ["Push red block up"] * 64,
+            'instruction': ["Find the red block"] * 64,
             'action': torch.randn(64, 2).to(device)
         }
         
@@ -136,5 +136,5 @@ print("=" * 60)
 print("\nYou're ready to train:")
 print("  python train_tiny_vla.py")
 print("\nOr visualize the dataset:")
-print("  python -c \"from tiny_vla_dataset import BlockPushDataset; d = BlockPushDataset(100); d.visualize_sample(0)\"")
+print("  python -c \"from tiny_vla_dataset import BlockFindDataset; d = BlockFindDataset(100); d.visualize_sample(0)\"")
 print("=" * 60)

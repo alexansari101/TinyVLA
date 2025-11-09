@@ -8,17 +8,16 @@ feature representation.
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from scipy import stats
-from typing import Dict, List, Tuple
+from typing import Dict, List
 import logging
 
 # Import model and dataset for main execution
 try:
     from tiny_vla_model import create_tiny_vla
-    from tiny_vla_dataset import BlockPushDataset
+    from tiny_vla_dataset import BlockFindDataset
 except ImportError:
     print("WARNING: Could not import tiny_vla_model or tiny_vla_dataset.")
     print("File will load, but the __main__ block will fail.")
@@ -119,24 +118,39 @@ def extract_fused_features(
 ) -> Dict[str, np.ndarray]:
     """
     Extracts fused features and labels for:
-    1. Source color
-    2. Source quadrant
-    3. Relative direction ("A toward B")
+    1. Target color
+    2. Target quadrant
+    3. Relative direction (Center to Target)
     """
     model.eval()
 
     features_list = []
     colors_list = []
     quadrant_list = []
-    rel_dir_list = []  # <-- NEW
+    rel_dir_list = []
     images_list = []
     instructions_list = []
 
+    # Check if the dataset is the expected type
+    if not hasattr(dataset, 'samples'):
+        print("ERROR: Dataset object does not have a '.samples' attribute.")
+        print("This utility requires the BlockFindDataset, not a generic DataLoader or wrapper.")
+        return {}
+
     with torch.no_grad():
         for i in range(min(num_samples, len(dataset))):
-            sample = dataset[i]
-            image_tensor = sample['image'] # (C, H, W)
-            instruction_text = sample['instruction']
+            
+            # Get tensors from __getitem__
+            sample_tensors = dataset[i]
+            image_tensor = sample_tensors['image'] # (C, H, W)
+            
+            # Get metadata from raw .samples list for robust labels
+            try:
+                sample_meta = dataset.samples[i]
+                instruction_text = sample_meta['instruction']
+            except (IndexError, AttributeError):
+                print(f"Warning: Could not access dataset.samples[{i}]. Skipping.")
+                continue
 
             # Tokenize
             if model.tokenizer is None:
@@ -146,7 +160,7 @@ def extract_fused_features(
             input_ids = tokens['input_ids'].to(device)
             attention_mask = tokens['attention_mask'].to(device)
             
-            # --- Perform full forward pass (assuming residual + norm fix) ---
+            # --- Perform full forward pass ---
             image_batch = image_tensor.unsqueeze(0).to(device)
             vision_features = model.vision_encoder(image_batch)
             lang_features = model.language_model(input_ids, attention_mask)
@@ -172,34 +186,44 @@ def extract_fused_features(
             
             features_list.append(fused_final.cpu().numpy()[0])
 
-            # --- Parse "A toward B" instruction ---
+            # Parse based on metadata, not instruction string ---
             try:
-                parts = instruction_text.split() # "Push", "the", "red", "block", "toward", "the", "green"
-                color_source = parts[2]
-                color_target = parts[6]
-            except IndexError:
+                # Get target color directly from the dataset's metadata
+                color_target = sample_meta['target_color']
+            except KeyError:
                 print(f"Warning: Could not parse instruction: '{instruction_text}'")
-                continue
+                print("Dataset metadata missing 'target_color'. Attempting string parse.")
+                # Fallback to string parsing if metadata fails
+                try:
+                    color_target = instruction_text.split()[2] # "find the [red] block"
+                except IndexError:
+                    print(f"Fallback parse failed for: '{instruction_text}'. Skipping.")
+                    continue
             
-            pos_source = find_block_center(image_tensor, color_source)
+            # Find the target block in the image
             pos_target = find_block_center(image_tensor, color_target)
             
-            quadrant = get_quadrant(pos_source)
+            # Source is the center of the image
+            H, W = image_tensor.shape[1:]
+            pos_source = [W / 2.0, H / 2.0]
+            
+            # Get labels based on the target block
+            quadrant = get_quadrant(pos_target, grid_size=H)
             rel_dir = get_relative_direction(pos_source, pos_target)
             
-            colors_list.append(color_source)
-            quadrant_list.append(quadrant)
-            rel_dir_list.append(rel_dir) # <-- NEW
+            colors_list.append(color_target) # Label is the target color
+            quadrant_list.append(quadrant)   # Label is the target quadrant
+            rel_dir_list.append(rel_dir)     # Label is the direction from center
             # --- END PARSING ---
 
-            images_list.append(sample['image'].cpu().numpy())
+            images_list.append(sample_tensors['image'].cpu().numpy()) # Use the tensor
             instructions_list.append(instruction_text)
 
     return {
         'features': np.array(features_list),
         'colors': np.array(colors_list),
         'quadrants': np.array(quadrant_list),
-        'rel_dirs': np.array(rel_dir_list), # <-- NEW
+        'rel_dirs': np.array(rel_dir_list),
         'images': np.array(images_list),
         'instructions': np.array(instructions_list)
     }
@@ -445,6 +469,13 @@ def visualize_patch_features(
     """
     model.eval()
 
+    # Get instruction from metadata for title
+    try:
+        sample_meta = dataset.samples[sample_idx]
+        instruction_text = sample_meta['instruction']
+    except Exception:
+        instruction_text = "N/A" # Fallback
+        
     sample = dataset[sample_idx]
     image = sample['image'].unsqueeze(0).to(device)
 
@@ -474,7 +505,7 @@ def visualize_patch_features(
 
     # Original image
     axes[0].imshow(img_to_plot) # Use the permuted image
-    axes[0].set_title(f"Original Image\n{sample['instruction'][:30]}...", fontsize=10)
+    axes[0].set_title(f"Original Image\n{instruction_text[:30]}...", fontsize=10)
     axes[0].axis('off')
 
     # Patch feature norms
@@ -537,21 +568,24 @@ def run_full_diagnostics(
 
     # --- Test 1: Color Discrimination ---
     print("\n" + "="*60)
-    print("Test 1: Source Color Discrimination (ANOVA)")
+    #  Clarified test name
+    print("Test 1: Target Color Discrimination (ANOVA)")
     print("="*60)
     stats_results_color = test_color_discrimination(features, colors)
     print(f"Discrimination rate: {stats_results_color['discrimination_rate']:.2%}")
 
     # --- Test 2: Positional Discrimination ---
     print("\n" + "="*60)
-    print("Test 2: Source Position Discrimination (ANOVA)")
+    #  Clarified test name
+    print("Test 2: Target Position Discrimination (ANOVA)")
     print("="*60)
     stats_results_pos = test_color_discrimination(features, quadrants)
     print(f"Discrimination rate: {stats_results_pos['discrimination_rate']:.2%}")
 
     # --- Test 3: Relative Direction Discrimination ---
     print("\n" + "="*60)
-    print("Test 3: Relative Direction Discrimination (ANOVA)")
+    #  Clarified test name
+    print("Test 3: Relative Direction (from Center) Discrimination (ANOVA)")
     print("="*60)
     stats_results_dir = test_color_discrimination(features, rel_dirs)
     print(f"Discrimination rate: {stats_results_dir['discrimination_rate']:.2%}")
@@ -559,7 +593,7 @@ def run_full_diagnostics(
     for pair, dist in stats_results_dir['centroid_distances'].items():
         print(f"  {pair}: {dist:.4f}")
 
-    print(f"\n" + "="*60)
+    print("\n" + "="*60)
     print("Overall Feature Statistics")
     print("="*60)
     feature_mean = features.mean()
@@ -573,10 +607,10 @@ def run_full_diagnostics(
     print("="*60)
     visualize_feature_space(features, colors, method='pca',
                            save_path=f'{output_prefix}_pca_by_color.png',
-                           title_prefix='Fused Features by Color')
+                           title_prefix='Fused Features by Target Color')
     visualize_feature_space(features, quadrants, method='pca',
                            save_path=f'{output_prefix}_pca_by_position.png',
-                           title_prefix='Fused Features by Position')
+                           title_prefix='Fused Features by Target Position')
     visualize_feature_space(features, rel_dirs, method='pca',
                            save_path=f'{output_prefix}_pca_by_direction.png',
                            title_prefix='Fused Features by Relative Direction')
@@ -598,15 +632,16 @@ def run_full_diagnostics(
 
     # Summary judgment
     print("\nSummary:")
+    #  Changed "source" to "target"
     if stats_results_color['discrimination_rate'] > 0.5:
-        print("✓ Fused features CAN discriminate *source color*")
+        print("✓ Fused features CAN discriminate *target color*")
     else:
-        print("✗ Fused features CANNOT discriminate *source color*")
+        print("✗ Fused features CANNOT discriminate *target color*")
         
     if stats_results_pos['discrimination_rate'] > 0.5:
-        print("✓ Fused features CAN discriminate *source position*")
+        print("✓ Fused features CAN discriminate *target position*")
     else:
-        print("✗ Fused features CANNOT discriminate *source position*")
+        print("✗ Fused features CANNOT discriminate *target position*")
 
     if stats_results_dir['discrimination_rate'] > 0.5:
         print("✓ Fused features CAN discriminate *relative direction*")
@@ -652,11 +687,21 @@ def compare_vision_language_magnitudes(
     fused_post_norm_means, fused_post_norm_stds = [], []
 
 
+    # Check if the dataset is the expected type
+    if not hasattr(dataset, 'samples'):
+        print("ERROR: Dataset object does not have a '.samples' attribute.")
+        return {}
+
     with torch.no_grad():
         for i in range(min(num_samples, len(dataset))):
+            #  Get instruction from metadata
+            try:
+                instruction = [dataset.samples[i]['instruction']]
+            except Exception:
+                continue # Skip if error
+            
             sample = dataset[i]
             image = sample['image'].unsqueeze(0).to(device)
-            instruction = [sample['instruction']]
 
             # Tokenize
             if model.tokenizer is None:
@@ -729,18 +774,18 @@ def compare_vision_language_magnitudes(
     print("="*60)
     print("Activation Statistics (Mean/Std of Values)")
     print("============================================================")
-    print(f"\nLanguage Query (to attention):")
+    print("\nLanguage Query (to attention):")
     print(f"  Std (value):  {results['lang_query_std_val']:.4f}")
-    print(f"\nVision Patches (to attention):")
+    print("\nVision Patches (to attention):")
     print(f"  Std (value):  {results['vision_patch_std_val']:.4f}")
     
-    print(f"\nFused features (PRE-NORM, from attention):")
+    print("\nFused features (PRE-NORM, from attention):")
     print(f"  Std (value):  {results['fused_pre_norm_std_val']:.4f}")
 
-    print(f"\nFused features (POST-RESIDUAL, PRE-NORM):")
-    print(f"  Note: Std of (lang_pooled + fused_pre_norm) is now passed to norm layer.")
+    print("\nFused features (POST-RESIDUAL, PRE-NORM):")
+    print("  Note: Std of (lang_pooled + fused_pre_norm) is now passed to norm layer.")
 
-    print(f"\nFused features (POST-NORM, to action head):")
+    print("\nFused features (POST-NORM, to action head):")
     print(f"  Std (value):  {results['fused_post_norm_std_val']:.4f}")
 
 
@@ -769,11 +814,21 @@ def check_projection_layer_impact(
     features_after_proj = []
     colors = []
 
+    # Check if the dataset is the expected type
+    if not hasattr(dataset, 'samples'):
+        print("ERROR: Dataset object does not have a '.samples' attribute.")
+        return {}
+
     with torch.no_grad():
         for i in range(min(num_samples, len(dataset))):
-            sample = dataset[i]
-            image_tensor = sample['image'] # (C, H, W)
-            instruction = sample['instruction']
+            sample_tensors = dataset[i]
+            image_tensor = sample_tensors['image'] # (C, H, W)
+            
+            #  Get metadata from raw .samples list for robust labels
+            try:
+                sample_meta = dataset.samples[i]
+            except (IndexError, AttributeError):
+                continue
 
             # Get vision features BEFORE projection
             vision_raw = model.vision_encoder(image_tensor.unsqueeze(0).to(device))
@@ -794,11 +849,11 @@ def check_projection_layer_impact(
             features_before_proj.append(vision_mean_before.cpu().numpy()[0])
             features_after_proj.append(vision_mean_after.cpu().numpy()[0])
 
-            # Get source color
+            # Get target color from metadata
             try:
-                color = instruction.split()[2]
-            except IndexError:
-                continue # Skip malformed instruction
+                color = sample_meta['target_color']
+            except KeyError:
+                continue # Skip malformed sample
             colors.append(color)
 
     features_before_proj = np.array(features_before_proj)
@@ -826,21 +881,21 @@ def check_projection_layer_impact(
     avg_after = np.mean(after_dists) if after_dists else 0.0
     ratio = (avg_after / avg_before) if avg_before > 1e-6 else 1.0
     
-    print(f"\n[SUMMARY]")
+    print("\n[SUMMARY]")
     print(f"  Average centroid distance BEFORE: {avg_before:.4f}")
     print(f"  Average centroid distance AFTER:  {avg_after:.4f}")
     print(f"  Ratio (after/before): {ratio:.2f}x")
 
     if avg_before < 1e-6:
-         print(f"\n⚠ WARNING: No color separation detected BEFORE projection.")
+         print("\n⚠ WARNING: No color separation detected BEFORE projection.")
     elif avg_after < avg_before * 0.5:
-        print(f"\n✗ Projection layer is DESTROYING color information!")
+        print("\n✗ Projection layer is DESTROYING color information!")
         print(f"   Distances decreased by {(1 - ratio)*100:.1f}%")
     elif avg_after < avg_before * 0.9:
-        print(f"\n⚠ Projection layer is WEAKENING color information")
+        print("\n⚠ Projection layer is WEAKENING color information")
         print(f"   Distances decreased by {(1 - ratio)*100:.1f}%")
     else:
-        print(f"\n✓ Projection layer preserves/enhances color information")
+        print("\n✓ Projection layer preserves/enhances color information")
 
     return {
         'features_before': features_before_proj,
@@ -885,10 +940,10 @@ if __name__ == "__main__":
 
     # Create test dataset
     try:
-        dataset = BlockPushDataset(num_samples=500, seed=44)
-        print("Loaded BlockPushDataset.")
+        dataset = BlockFindDataset(num_samples=500, seed=44)
+        print("Loaded BlockFindDataset.")
     except Exception as e:
-        print(f"ERROR: Could not load BlockPushDataset: {e}")
+        print(f"ERROR: Could not load BlockFindDataset: {e}")
         print("Please ensure 'tiny_vla_dataset.py' is in the same directory.")
         exit()
 

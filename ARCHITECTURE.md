@@ -63,7 +63,7 @@ vision_dim=192, vision_layers=4
 lang_dim=256, lang_layers=4
 ```
 - **Purpose**: Learn VLA basics, rapid iteration
-- **Training**: 1-2 minutes (on BlockPush example dataset, RTX 3070)
+- **Training**: 1-2 minutes (on BlockFind example dataset, RTX 3070)
 - **Hardware**: Single GPU (RTX 3070)
 
 ### Stage 2: MediumVLA (100M)

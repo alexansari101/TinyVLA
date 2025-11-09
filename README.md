@@ -105,7 +105,7 @@ python inference_tiny_vla.py --visualize
 python inference_tiny_vla.py --evaluate --num-samples 1000
 ```
 
-## 🎮 Example Dataset: BlockPush (Toy Problem)
+## 🎮 Example Dataset: BlockFind (Toy Problem)
 
 **Environment:**
 - 64x64 top-down view of colored blocks on a grid
@@ -149,7 +149,7 @@ This would create a ~450M parameter model (like SmolVLA).
 
 ### Using Your Own Dataset
 
-Replace the included `BlockPushDataset` example with your own:
+Replace the included `BlockFindDataset` example with your own:
 
 ```python
 class YourDataset(Dataset):
@@ -241,7 +241,7 @@ Once you've validated your approach on the toy problem, scale up:
 |---------|----------|
 | **CUDA out of memory** | Reduce `batch_size=32` or `vision_embed_dim=128` in config |
 | **Loss is NaN** | Lower learning rate: `lr=1e-4` instead of `3e-4` |
-| **Model not learning** | Check dataset: `python -c "from tiny_vla_dataset import BlockPushDataset; d=BlockPushDataset(10); d.visualize_sample(0)"` |
+| **Model not learning** | Check dataset: `python -c "from tiny_vla_dataset import BlockFindDataset; d=BlockFindDataset(10); d.visualize_sample(0)"` |
 | **Training too slow** | Reduce `train_size=2000` for prototyping, or increase `batch_size=128` |
 | **Import errors** | `pip install -r requirements.txt` |
 | **Colab issues** | Set `num_workers=2` in config (Colab has limited CPU) |

@@ -57,7 +57,7 @@ python test_setup.py
 ### Dataset Visualization
 ```bash
 # Generate sample visualization from included example dataset (creates sample_visualization.png)
-python -c "from tiny_vla_dataset import BlockPushDataset; d=BlockPushDataset(10); d.visualize_sample(0)"
+python -c "from tiny_vla_dataset import BlockFindDataset; d=BlockFindDataset(10); d.visualize_sample(0)"
 ```
 
 ## Architecture
@@ -119,7 +119,7 @@ config['model'] = {
 }
 ```
 
-## Dataset: BlockPush (Included Example Dataset)
+## Dataset: BlockFind (Included Example Dataset)
 
 **Purpose**: Toy problem / synthetic task that validates vision-language fusion works correctly.
 
@@ -151,7 +151,7 @@ config['model'] = {
 - Periodic checkpoints every 5 epochs → `checkpoints/checkpoint_epoch_X.pt`
 - Config saved to `checkpoints/config.json`
 
-**Expected Performance** (minimal variant on BlockPush dataset):
+**Expected Performance** (minimal variant on BlockFind dataset):
 - Final validation L2 error: 0.05-0.10
 - Direction accuracy (cosine similarity > 0.8): >95%
 
@@ -160,7 +160,7 @@ config['model'] = {
 ```
 tiny_vla/
 ├── tiny_vla_model.py       # Core architecture (TinyViT, TinyLanguageModel, TinyVLA)
-├── tiny_vla_dataset.py     # BlockPush synthetic dataset generator
+├── tiny_vla_dataset.py     # BlockFind synthetic dataset generator
 ├── train_tiny_vla.py       # Training loop with TensorBoard logging
 ├── inference_tiny_vla.py   # Evaluation and visualization
 ├── test_setup.py           # Environment verification
@@ -264,7 +264,7 @@ To scale from toy problem to real robot deployment:
 
 1. **Vision**: Replace TinyViT with pretrained SigLip/CLIP (freeze or LoRA)
 2. **Language**: Replace custom model with Phi-2/Llama (freeze or LoRA)
-3. **Dataset**: Switch from BlockPush example dataset to Bridge, RT-1, or custom robot data
+3. **Dataset**: Switch from BlockFind example dataset to Bridge, RT-1, or custom robot data
 4. **Actions**: Extend to 7-DOF + gripper (change `action_dim`)
 5. **Fusion**: Upgrade to cross-attention for better multimodal reasoning
 6. **Training**: Use larger batch sizes, longer training (100+ epochs on real data)
