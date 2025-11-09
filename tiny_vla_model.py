@@ -443,10 +443,10 @@ if __name__ == "__main__":
     batch_size = 4
     images = torch.randn(batch_size, 3, 64, 64)
     instructions = [
-        "Push the red block up",
-        "Move blue block left",
-        "Push green block down",
-        "Move yellow block right"
+        "find the red block",
+        "find the blue block",
+        "find the green block",
+        "find the yellow block"
     ]
     
     images, input_ids, attention_mask = model.prepare_inputs(images, instructions)

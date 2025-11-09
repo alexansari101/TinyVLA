@@ -112,13 +112,13 @@ python inference_tiny_vla.py --evaluate --num-samples 1000
 - 3-4 colored blocks per scene
 
 **Language instructions:**
-- "Push the red block up"
-- "Move blue block left"
-- "Push green block down"
+- "find the red block"
+- "find the blue block"
+- "find the green block"
 
 **Actions:**
 - Continuous (dx, dy) in range [-1, 1]
-- Normalized direction to push the target block
+- Normalized direction vector from center to target block
 
 **Dataset:**
 - 8000 training samples

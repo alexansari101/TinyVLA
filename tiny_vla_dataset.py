@@ -1,6 +1,6 @@
 """
 Synthetic Dataset Generator for TinyVLA
-Creates a simple block-pushing task with images + language + actions
+Creates a simple block-finding task with images + language + actions
 """
 
 import numpy as np

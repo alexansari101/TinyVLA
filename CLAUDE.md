@@ -125,8 +125,8 @@ config['model'] = {
 
 **Structure** (`tiny_vla_dataset.py:13-153`):
 - Generates 64x64 images with 3-4 colored blocks on an 8x8 grid
-- Language instructions: "Push the [color] block [direction]"
-- Actions: Normalized (dx, dy) displacement vectors
+- Language instructions: "find the [color] block"
+- Actions: Normalized (dx, dy) direction vectors from center to target block
 - Pre-generated at initialization for consistency across epochs
 
 **Key Validation Metric**: A vision-only or language-only model cannot solve this task perfectly. Success requires proper multimodal fusion.
