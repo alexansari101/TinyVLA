@@ -1,6 +1,8 @@
 # TinyVLA: Fast-Iteration Vision-Language-Action Model
 
-A minimal Vision-Language-Action model designed for **rapid experimentation** on laptops/Colab with limited compute. The minimal variant (~13M parameters) is architecturally similar to SmolVLA but ~35x smaller for ultra-fast training.
+A minimal Vision-Language-Action model designed for **rapid experimentation** on laptops/Colab with limited compute. The minimal variant (~13M parameters) but ~35x smaller than alternatives like SmolVLA for ultra-fast training.
+
+_Note: This project is still in **active development**_
 
 ## 🎯 Design Goals
 
@@ -29,7 +31,7 @@ TinyVLA Minimal Variant (~13M parameters)
 ```
 
 **Key design choices:**
-- **ViT-style vision encoder**: Same patch-based approach as SigLip/CLIP
+- **ViT-style vision encoder**: Same patch-based approach as SigLip/FasterViT
 - **Transformer decoder for language**: Similar to Phi-2 but much smaller
 - **Simple fusion**: Vision CLS token + language pooling (can upgrade to cross-attention)
 - **Continuous action prediction**: MSE loss on (dx, dy) displacements
@@ -187,7 +189,7 @@ config = {
 
 Once you've validated your approach on the toy problem, scale up:
 
-1. **Better vision encoder**: Replace TinyViT with pretrained SigLip/CLIP
+1. **Better vision encoder**: Replace TinyViT with pretrained SigLip/FasterViT
 2. **Larger language model**: Use Phi-2 or Llama-based backbones
 3. **Cross-attention fusion**: Replace simple pooling with cross-attention
 4. **Real datasets**: Switch to Bridge, RT-1, or your own robot data
@@ -260,7 +262,7 @@ Once you've mastered TinyVLA:
 
 ## 📄 License
 
-MIT License - feel free to use for research and education!
+MIT License
 
 ## 🙏 Acknowledgments
 

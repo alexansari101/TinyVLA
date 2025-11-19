@@ -1,8 +1,8 @@
 # TinyVLA Architecture Deep Dive
 
-## TinyVLA vs. State-of-the-Art Vision-Language-Action Models
+## TinyVLA vs. State-of-the-Art (Small) Vision-Language-Action Models
 
-This document shows how TinyVLA's architecture relates to larger, production VLA models. The key insight: **same architecture, different scale**.
+This document shows how TinyVLA's architecture relates to alternative State-of-the-Art (small) VLAs.
 
 ## Architecture Comparison Table
 
@@ -20,9 +20,9 @@ This document shows how TinyVLA's architecture relates to larger, production VLA
 | **GPU Memory (Est.)** | 2-3 GB | 12-16 GB | 40+ GB | 80+ GB |
 | **Typical Use Case** | Learning/Prototyping | Research/Fine-tuning | Production | Large-scale deployment |
 
-## Architectural Patterns (Shared Across All VLAs)
+## Architectural Patterns
 
-All modern VLAs follow this pattern:
+Modern VLAs tend to follow this pattern:
 
 ```
 Image → Vision Encoder → Vision Features
@@ -43,58 +43,12 @@ Vision Features + Language Features → Fusion → Action Prediction
 - **Shared**: Self-attention, feedforward layers, token embeddings
 
 ### 3. Vision-Language Fusion
-| Method | TinyVLA | SmolVLA/OpenVLA |
-|--------|---------|-----------------|
-| Simple | ✓ Pooling + Addition | - |
-| Cross-Attention | - | ✓ Q from lang, K/V from vision |
-| Efficiency | Faster, simpler | More expressive |
-| Parameters | Minimal | Significant |
+ - **Cross-Attention**: ✓ Q from lang, K/V from vision
 
 ### 4. Action Prediction
 - **Pattern**: MLP head on fused features
-- **All models**: Linear layers + ReLU/GELU + output projection
-- **Output**: Continuous actions (xyz, gripper) or discretized tokens
 
-## Scaling Path: From TinyVLA to Production
-
-### Stage 1: TinyVLA Minimal Variant (13M) - **You are here**
-```python
-vision_dim=192, vision_layers=4
-lang_dim=256, lang_layers=4
-```
-- **Purpose**: Learn VLA basics, rapid iteration
-- **Training**: 1-2 minutes (on BlockFind example dataset, RTX 3070)
-- **Hardware**: Single GPU (RTX 3070)
-
-### Stage 2: MediumVLA (100M)
-```python
-vision_dim=384, vision_layers=6
-lang_dim=512, lang_layers=8
-```
-- **Purpose**: Test on real robot data
-- **Hardware**: Single GPU (RTX 3090/4090)
-
-### Stage 3: SmolVLA-like (450M)
-```python
-vision_dim=384, vision_layers=12  # Full SigLip
-lang_dim=2560, lang_layers=32     # Phi-2
-+ Cross-attention fusion
-```
-- **Purpose**: Research-grade performance
-- **Hardware**: A100 40GB or 2x RTX 4090
-
-### Stage 4: OpenVLA-like (7B)
-```python
-vision_dim=1024, vision_layers=24  # SigLip-Large
-lang_dim=4096, lang_layers=32      # Llama-2-7B
-+ Cross-attention + Advanced fusion
-```
-- **Purpose**: Production deployment
-- **Hardware**: Multiple A100s (requires distributed training)
-
-## Key Differences Explained
-
-### Why is TinyVLA Fast?
+## Why is TinyVLA Fast?
 
 1. **Small embedding dimensions**:
    - 192-256 vs 2048-4096
@@ -126,29 +80,13 @@ lang_dim=4096, lang_layers=32      # Llama-2-7B
 
 ### What Do You Keep?
 
-✓ **Same training paradigm**: Behavioral cloning (MSE on actions)
 ✓ **Same architecture patterns**: ViT + Transformer + Fusion
+
 ✓ **Same data format**: (image, text, action) tuples
+
 ✓ **Same evaluation metrics**: Success rate, action error
+
 ✓ **Same scaling laws**: More data + bigger model = better performance
-
-## Practical Implications
-
-### When to Use TinyVLA
-- ✓ Learning VLA concepts
-- ✓ Prototyping new ideas (fusion methods, action spaces)
-- ✓ Testing data preprocessing pipelines
-- ✓ Ablation studies (what components matter?)
-- ✓ Teaching/tutorials
-- ✓ Limited compute budget
-
-### When to Scale Up
-- Real robot deployment
-- Complex manipulation tasks
-- Long-horizon reasoning
-- Large action spaces (20+ DOF)
-- Need for generalization to novel scenes
-- Production applications
 
 ## Bridging the Gap: Techniques
 
@@ -194,77 +132,6 @@ large_model_actions = large_model(images, texts)
 # Train small model to match
 loss = MSE(tiny_model(images, texts), large_model_actions)
 ```
-
-## Research Papers by Architecture Size
-
-### Toy/Learning (1-50M params)
-- Your experiments with TinyVLA
-- Minimal VLA examples in textbooks
-
-### Research (100-500M params)
-- **SmolVLA** (HuggingFace, 2024) - 450M
-- **Octo-Base** (UC Berkeley, 2024) - 93M
-- Early versions of RT-1
-
-### Production (1-10B params)
-- **OpenVLA** (Stanford, 2024) - 7B
-- **Octo** (UC Berkeley, 2024) - 7B
-- **RT-2** (Google DeepMind, 2023) - 55B (PaLM-E based)
-- **RT-X** (Multi-institution, 2023) - Various sizes
-
-## Code Compatibility
-
-The beautiful thing: **Your TinyVLA code is structurally similar to production VLAs.**
-
-```python
-# This works for ALL sizes
-def vla_forward(image, text):
-    vision_features = vision_encoder(image)
-    language_features = language_model(text)
-    fused_features = fusion(vision_features, language_features)
-    action = action_head(fused_features)
-    return action
-```
-
-The only differences:
-- Layer dimensions (192 vs 2048)
-- Number of layers (4 vs 32)
-- Fusion complexity (pooling vs cross-attention)
-
-## Validation: Does TinyVLA Actually Work?
-
-**Question**: If TinyVLA is so small, does it learn anything useful?
-
-**Answer**: Yes! The toy problem is designed so that:
-- Perfect performance requires understanding both vision AND language
-- Random policy: ~1.4 L2 error
-- Vision-only: ~0.5 L2 error  
-- Language-only: ~0.8 L2 error
-- TinyVLA: ~0.05 L2 error ✓
-
-This proves the model is doing vision-language fusion correctly.
-
-## Summary
-
-| Aspect | Key Insight |
-|--------|-------------|
-| **Architecture** | Same across all sizes (ViT + Transformer + MLP) |
-| **Training** | Same paradigm (behavioral cloning) |
-| **Scaling** | Change hyperparameters, not code structure |
-| **Learning** | TinyVLA teaches you production VLA concepts |
-| **Speed** | Training time scales with model size and dataset complexity |
-| **Performance** | Larger = better, but diminishing returns |
-
-**Bottom line**: Master TinyVLA, and you understand how all VLAs work. The rest is just compute.
-
-## Further Reading
-
-- **RT-1**: First VLA paper (2022) - https://arxiv.org/abs/2212.06817
-- **RT-2**: Scaling to LLMs (2023) - https://arxiv.org/abs/2307.15818
-- **Octo**: Open-source VLA (2024) - https://arxiv.org/abs/2405.12213
-- **OpenVLA**: Open VLA with Llama (2024) - https://arxiv.org/abs/2406.09246
-- **SmolVLA**: Efficient VLA (2024) - HuggingFace blog
-
 ---
 
 Now go train your TinyVLA and see these patterns in action! 🚀
