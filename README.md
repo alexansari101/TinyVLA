@@ -15,7 +15,7 @@ _Note: This project is still in **active development**_
 
 ## 📊 Model Architecture
 
-```
+```text
 TinyVLA Minimal Variant (~13M parameters)
 ├── Vision Encoder: TinyViT (~1.8M params)
 │   ├── Patch embedding (8x8 patches)
@@ -31,6 +31,7 @@ TinyVLA Minimal Variant (~13M parameters)
 ```
 
 **Key design choices:**
+
 - **ViT-style vision encoder**: Same patch-based approach as SigLip/FasterViT
 - **Transformer decoder for language**: Similar to Phi-2 but much smaller
 - **Simple fusion**: Vision CLS token + language pooling (can upgrade to cross-attention)
@@ -89,6 +90,7 @@ tensorboard --logdir=logs
 ```
 
 **Expected results for minimal variant (on a laptop with an RTX 3070):**
+
 - Training time: ~1-2 minutes (20 epochs)
 - Final val L2 error: ~0.05-0.10
 - GPU memory: ~2-3 GB
@@ -110,19 +112,23 @@ python inference_tiny_vla.py --evaluate --num-samples 1000
 ## 🎮 Example Dataset: BlockFind (Toy Problem)
 
 **Environment:**
+
 - 64x64 top-down view of colored blocks on a grid
 - 3-4 colored blocks per scene
 
 **Language instructions:**
+
 - "find the red block"
 - "find the blue block"
 - "find the green block"
 
 **Actions:**
+
 - Continuous (dx, dy) in range [-1, 1]
 - Normalized direction vector from center to target block
 
 **Dataset:**
+
 - 8000 training samples
 - 1000 validation samples
 - 1000 test samples
@@ -166,6 +172,7 @@ class YourDataset(Dataset):
 ### Different Action Spaces
 
 **Discrete actions** (e.g., navigation):
+
 ```python
 # In tiny_vla_model.py
 self.action_head = nn.Sequential(
@@ -177,6 +184,7 @@ self.action_head = nn.Sequential(
 ```
 
 **High-dimensional actions** (e.g., 7-DOF robot):
+
 ```python
 config = {
     'model': {
@@ -196,6 +204,7 @@ Once you've validated your approach on the toy problem, scale up:
 5. **More action dimensions**: Extend to 7-DOF + gripper
 
 **Key architectural similarities maintained:**
+
 - Patch-based vision encoding
 - Transformer-based language processing
 - Learned vision-language fusion
@@ -205,7 +214,7 @@ Once you've validated your approach on the toy problem, scale up:
 
 ## 💡 Learning Tips
 
-### Quick experiments to try:
+### Quick experiments to try
 
 1. **Architecture ablations** (~30 sec to 1 min each):
    - Remove vision encoder → see how much vision matters
@@ -228,12 +237,14 @@ Once you've validated your approach on the toy problem, scale up:
 ## 📚 Related Work & Papers
 
 **Key VLA papers to read:**
+
 - [RT-1: Robotics Transformer](https://arxiv.org/abs/2212.06817) - Original VLA paper
 - [RT-2: Vision-Language-Action Models](https://arxiv.org/abs/2307.15818) - Scaling to large LLMs
 - [Octo: An Open-Source Generalist Robot Policy](https://arxiv.org/abs/2405.12213)
 - [OpenVLA: An Open-Source Vision-Language-Action Model](https://arxiv.org/abs/2406.09246)
 
 **Toy problems in robotics:**
+
 - [Behavioural Cloning (BC) on toy tasks](https://arxiv.org/abs/2302.14693)
 - [Data-efficient imitation learning](https://arxiv.org/abs/2004.04906)
 
@@ -255,7 +266,7 @@ Once you've mastered TinyVLA:
 1. **Scale up**: Gradually increase model size (50M → 100M → 250M → 500M)
 2. **Add pretraining**: Use pretrained SigLip + Phi-2
 3. **Real robot**: Collect your own data or use Bridge/RT-1 datasets
-4. **Advanced techniques**: 
+4. **Advanced techniques**:
    - LoRA fine-tuning for efficiency
    - Diffusion policies for multi-modal actions
    - Mixture of experts for generalization
@@ -267,12 +278,13 @@ MIT License
 ## 🙏 Acknowledgments
 
 Inspired by:
+
 - SmolVLA and OpenVLA architectures
 - RT-1/RT-2 vision-language-action design
 - HuggingFace Transformers library
 
 ---
 
-**Happy experimenting! 🚀**
+## Happy experimenting! 🚀
 
 For questions or issues, feel free to open an issue or reach out.
