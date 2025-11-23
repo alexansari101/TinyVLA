@@ -8,7 +8,7 @@ This document shows how TinyVLA's architecture relates to alternative State-of-t
 
 | Component | TinyVLA (Minimal Variant) | SmolVLA | OpenVLA | RT-2 |
 |-----------|---------------------------|---------|---------|------|
-| **Total Parameters** | 13M | 450M | 7B | 55B |
+| **Total Parameters** | 14M | 450M | 7B | 55B |
 | **Vision Encoder** | TinyViT (4 layers) | SigLip (12 layers) | SigLip-Large | PaLI-X ViT |
 | **Vision Dim** | 192 | 384 | 1024 | 2048 |
 | **Vision Patches** | 8x8 | 16x16 | 16x16 | 16x16 |
@@ -17,6 +17,7 @@ This document shows how TinyVLA's architecture relates to alternative State-of-t
 | **Language Layers** | 4 | 32 | 32 | 48 |
 | **Fusion Method** | Pooling + Add | Cross-Attention | Cross-Attention | Cross-Attention |
 | **Action Head** | 2-layer MLP | 3-layer MLP | 3-layer MLP | 4-layer MLP |
+| **Text Output** | Separate Decoder | Decoder-only LLM | Decoder-only LLM | Decoder-only LLM |
 | **GPU Memory (Est.)** | 2-3 GB | 12-16 GB | 40+ GB | 80+ GB |
 | **Typical Use Case** | Learning/Prototyping | Research/Fine-tuning | Production | Large-scale deployment |
 
@@ -24,29 +25,39 @@ This document shows how TinyVLA's architecture relates to alternative State-of-t
 
 Modern VLAs tend to follow this pattern:
 
-```
+```Text
 Image → Vision Encoder → Vision Features
 Text → Language Encoder → Language Features
 Vision Features + Language Features → Fusion → Action Prediction
 ```
 
 ### 1. Vision Encoding
+
 - **Pattern**: Patch-based (ViT-style) encoding
 - **TinyVLA**: 64x64 image → 8x8 patches → 8x8 = 64 tokens
 - **SmolVLA**: 224x224 image → 16x16 patches → 14x14 = 196 tokens
 - **Shared**: Positional embeddings, CLS token, LayerNorm
 
 ### 2. Language Processing
+
 - **Pattern**: Transformer decoder or encoder
 - **TinyVLA**: 4-layer transformer with 256-dim embeddings
 - **SmolVLA**: Phi-2 (32 layers, 2560-dim)
 - **Shared**: Self-attention, feedforward layers, token embeddings
 
 ### 3. Vision-Language Fusion
- - **Cross-Attention**: ✓ Q from lang, K/V from vision
+
+- **Cross-Attention**: ✓ Q from lang, K/V from vision
 
 ### 4. Action Prediction
+
 - **Pattern**: MLP head on fused features
+
+### 5. Text Generation
+
+- **Pattern**: Causal language modeling
+- **TinyVLA**: Separate small decoder attending to fused features
+- **SmolVLA/OpenVLA**: The main LLM generates text tokens (unified backbone)
 
 ## Why is TinyVLA Fast?
 
@@ -91,7 +102,9 @@ Vision Features + Language Features → Fusion → Action Prediction
 ## Bridging the Gap: Techniques
 
 ### 1. Use Pretrained Components
+
 Instead of training from scratch:
+
 ```python
 # Use pretrained vision
 from transformers import AutoModel
@@ -110,7 +123,9 @@ for param in language.parameters():
 This gives you SmolVLA-like performance while maintaining TinyVLA training speed!
 
 ### 2. LoRA Fine-tuning
+
 Train only 1-5M parameters even on 7B models:
+
 ```python
 from peft import LoraConfig, get_peft_model
 
@@ -124,7 +139,9 @@ model = get_peft_model(large_model, lora_config)
 ```
 
 ### 3. Knowledge Distillation
+
 Train TinyVLA to mimic a larger model:
+
 ```python
 # Generate training data using large model
 large_model_actions = large_model(images, texts)
@@ -132,6 +149,7 @@ large_model_actions = large_model(images, texts)
 # Train small model to match
 loss = MSE(tiny_model(images, texts), large_model_actions)
 ```
+
 ---
 
 Now go train your TinyVLA and see these patterns in action! 🚀

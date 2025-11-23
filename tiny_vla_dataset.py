@@ -98,6 +98,16 @@ class BlockFindDataset(Dataset):
 
         action = action.astype(np.float32)
         
+        # 6. Generate text description of the action
+        # Simple heuristic: dominant direction
+        dx, dy = action[0], action[1]
+        if abs(dx) > abs(dy):
+            direction = "right" if dx > 0 else "left"
+        else:
+            direction = "down" if dy > 0 else "up"
+            
+        description = f"move {direction}"
+        
         # Create image
         image = self._render_scene(block_positions, grid_size)
         
@@ -105,6 +115,7 @@ class BlockFindDataset(Dataset):
             'image': image,
             'instruction': instruction,
             'action': action,
+            'description': description,
             'block_positions': block_positions,
             'source_color': 'center', # Source is the center
             'target_color': target_color
@@ -154,7 +165,8 @@ class BlockFindDataset(Dataset):
         return {
             'image': image,
             'instruction': sample['instruction'],
-            'action': action
+            'action': action,
+            'description': sample['description']
         }
     
     def visualize_sample(self, idx: int):
@@ -191,7 +203,7 @@ class BlockFindDataset(Dataset):
         )
         ax.add_patch(arrow)
 
-        ax.set_title(f"Instruction: {sample['instruction']}\nAction: [{sample['action'][0]:.3f}, {sample['action'][1]:.3f}]")
+        ax.set_title(f"Instr: {sample['instruction']}\nDesc: {sample['description']}\nAction: [{sample['action'][0]:.2f}, {sample['action'][1]:.2f}]")
         ax.axis('off')
         plt.tight_layout()
         plt.savefig('sample_visualization.png', dpi=150, bbox_inches='tight')

@@ -68,12 +68,26 @@ try:
     
     with torch.no_grad():
         images, input_ids, attention_mask = model.prepare_inputs(images, instructions)
-        actions = model(images, input_ids, attention_mask)
+        actions, _ = model(images, input_ids, attention_mask)
     
     print("✓ Forward pass successful")
     print(f"  Input shape: {images.shape}")
     print(f"  Output shape: {actions.shape}")
     print(f"  Sample prediction: {actions[0].cpu().numpy()}")
+
+    # Test 5.5: Test text decoder
+    print("\n[5.5/5] Testing text decoder...")
+    target_text = ["move right", "move left"]
+    _, target_ids, _ = model.prepare_inputs(images, target_text)
+    
+    with torch.no_grad():
+        _, text_logits = model(images, input_ids, attention_mask, target_text_ids=target_ids)
+        generated_ids = model.generate_text(images, input_ids, attention_mask)
+        generated_text = model.tokenizer.batch_decode(generated_ids)
+        
+    print("✓ Text decoder forward pass successful")
+    print(f"  Text logits shape: {text_logits.shape}")
+    print(f"  Generated text: {generated_text[0]}")
 except Exception as e:
     print(f"✗ Forward pass failed: {e}")
     sys.exit(1)
@@ -100,7 +114,7 @@ try:
         images, input_ids, attention_mask = model.prepare_inputs(
             batch['image'], batch['instruction']
         )
-        actions_pred = model(images, input_ids, attention_mask)
+        actions_pred, _ = model(images, input_ids, attention_mask)
         loss = criterion(actions_pred, batch['action'])
         
         optimizer.zero_grad()

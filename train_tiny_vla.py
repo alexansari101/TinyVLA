@@ -52,7 +52,10 @@ class TinyVLATrainer:
         )
         
         # Loss function (MSE for continuous actions)
-        self.criterion = nn.MSELoss()
+        # Loss function (MSE for continuous actions)
+        self.criterion_action = nn.MSELoss()
+        # Loss function for text (CrossEntropy)
+        self.criterion_text = nn.CrossEntropyLoss(ignore_index=0) # 0 is pad token
         
         # # Learning rate scheduler with warmup
         # self.warmup_steps = warmup_steps
@@ -95,16 +98,41 @@ class TinyVLATrainer:
             images = batch['image'].to(self.device)
             instructions = batch['instruction']
             actions_gt = batch['action'].to(self.device)
+            descriptions = batch['description']
             
             # Prepare inputs
             images, input_ids, attention_mask = self.model.prepare_inputs(images, instructions)
             
+            # Prepare targets for text decoder
+            _, target_ids, _ = self.model.prepare_inputs(images, descriptions)
+            
+            # Shift tokens for teacher forcing
+            decoder_input_ids = target_ids[:, :-1]
+            decoder_targets = target_ids[:, 1:]
+            
             # Forward pass
-            actions_pred = self.model(images, input_ids, attention_mask)
+            actions_pred, text_logits = self.model(
+                images, 
+                input_ids, 
+                attention_mask, 
+                target_text_ids=decoder_input_ids
+            )
             
             # Compute loss
-            loss = self.criterion(actions_pred, actions_gt)
-            # loss = (1 - F.cosine_similarity(actions_pred, actions_gt)).mean()
+            loss_action = self.criterion_action(actions_pred, actions_gt)
+            
+            # Logits: E.g. (B, 3, vocab_size) for [CLS, move, right]
+            # Targets: E.g. (B, 3) for [move, right, SEP]
+            # We predict next token at each position:
+            #   - At pos 0 (CLS): predict "move"
+            #   - At pos 1 (move): predict "right"
+            #   - At pos 2 (right): predict "SEP"
+            loss_text = self.criterion_text(
+                text_logits.reshape(-1, text_logits.size(-1)), # (B*3, vocab_size)
+                decoder_targets.reshape(-1) # (B*3,)
+            )
+            
+            loss = loss_action + loss_text
             
             # Backward pass
             self.optimizer.zero_grad()
@@ -130,6 +158,8 @@ class TinyVLATrainer:
             # Update progress bar
             pbar.set_postfix({
                 'loss': f'{loss.item():.4f}',
+                'act_loss': f'{loss_action.item():.4f}',
+                'txt_loss': f'{loss_text.item():.4f}',
                 'lr': f'{current_lr:.6f}'
             })
             
@@ -159,11 +189,30 @@ class TinyVLATrainer:
             images, input_ids, attention_mask = self.model.prepare_inputs(images, instructions)
             
             # Forward pass
-            actions_pred = self.model(images, input_ids, attention_mask)
+            # Forward pass
+            # For validation, we can just check action loss, or both.
+            # Let's check both.
+            descriptions = batch['description']
+            _, target_ids, _ = self.model.prepare_inputs(images, descriptions)
+            
+            decoder_input_ids = target_ids[:, :-1]
+            decoder_targets = target_ids[:, 1:]
+            
+            actions_pred, text_logits = self.model(
+                images, 
+                input_ids, 
+                attention_mask, 
+                target_text_ids=decoder_input_ids
+            )
             
             # Compute loss
-            loss = self.criterion(actions_pred, actions_gt)
-            # loss = (1 - F.cosine_similarity(actions_pred, actions_gt)).mean()
+            loss_action = self.criterion_action(actions_pred, actions_gt)
+            loss_text = self.criterion_text(
+                text_logits.reshape(-1, text_logits.size(-1)), 
+                decoder_targets.reshape(-1)
+            )
+            
+            loss = loss_action + loss_text
 
             total_loss += loss.item()
             
@@ -263,7 +312,9 @@ def main():
             'lang_layers': 4,
             'lang_heads': 4,
             'action_dim': 2,
-            'dropout': 0.1
+            'max_seq_len': 32,
+            'dropout': 0.1,
+            'use_text_decoder': True
         },
         'training': {
             'train_size': 8000,

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TinyVLA is a minimal Vision-Language-Action model designed for rapid experimentation on limited compute. The minimal variant (~13M parameters) is intended to be architecturally similar to state-of-the-art VLA models (SmolVLA, OpenVLA) but ~35x smaller for ultra-fast training iterations.
+TinyVLA is a minimal Vision-Language-Action model designed for rapid experimentation on limited compute. The minimal variant (~14M parameters) is intended to be architecturally similar to state-of-the-art VLA models (SmolVLA, OpenVLA) but ~35x smaller for ultra-fast training iterations.
 
 ## Design Goals
 
@@ -13,11 +13,10 @@ TinyVLA is a minimal Vision-Language-Action model designed for rapid experimenta
 - **Easy to scale**: Same code structure as larger VLAs - just change config
 - **Educational**: Clear, documented code for learning VLA fundamentals
 
-TODO: The current version of TinVLA uses a Transfomer encoder with no decoder head.
-
 ## Setup
 
 Uses `uv` for package management (Python 3.11+ required):
+
 ```bash
 uv venv && source .venv/bin/activate && uv pip install -e .
 ```
@@ -27,6 +26,7 @@ Alternative with pip: `python3.11 -m venv .venv && source .venv/bin/activate && 
 ## Common Commands
 
 ### Training
+
 ```bash
 # Train with default config (minimal variant: 1-2 min on RTX 3070)
 python train_tiny_vla.py
@@ -36,6 +36,7 @@ tensorboard --logdir=logs
 ```
 
 ### Inference & Evaluation
+
 ```bash
 # Interactive demo
 python inference_tiny_vla.py
@@ -51,12 +52,14 @@ python inference_tiny_vla.py --checkpoint checkpoints/checkpoint_epoch_10.pt --v
 ```
 
 ### Testing Setup
+
 ```bash
 # Verify environment and estimate training time
 python test_setup.py
 ```
 
 ### Dataset Visualization
+
 ```bash
 # Generate sample visualization from included example dataset (creates sample_visualization.png)
 python -c "from tiny_vla_dataset import BlockFindDataset; d=BlockFindDataset(10); d.visualize_sample(0)"
@@ -65,6 +68,7 @@ python -c "from tiny_vla_dataset import BlockFindDataset; d=BlockFindDataset(10)
 ## Architecture
 
 ### Three-Component Pipeline
+
 1. **Vision Encoder** (`TinyViT` in `tiny_vla_model.py:13-80`): ViT-style patch-based encoder
    - 64x64 images → 8x8 patches → transformer blocks
    - Returns: `(B, num_patches+1, vision_embed_dim)` where first token is CLS
@@ -80,6 +84,7 @@ python -c "from tiny_vla_dataset import BlockFindDataset; d=BlockFindDataset(10)
 ### Vision-Language Fusion Strategy
 
 Current implementation uses **simple pooling + addition** (`tiny_vla_model.py:256-259`):
+
 ```python
 vision_pooled = vision_features[:, 0, :]  # CLS token
 lang_pooled = lang_features.mean(dim=1)   # Mean pooling
@@ -87,6 +92,7 @@ fused = vision_pooled + lang_pooled       # Element-wise addition
 ```
 
 This is deliberately simple for fast iteration. For production scaling, consider:
+
 - Cross-attention (queries from language, keys/values from vision)
 - Learnable fusion tokens
 - Gated fusion mechanisms
@@ -96,7 +102,7 @@ This is deliberately simple for fast iteration. For production scaling, consider
 All hyperparameters are in `train_tiny_vla.py:232-256`. To scale up:
 
 ```python
-# Minimal variant (default): ~13M params
+# Minimal variant (default): ~14M params
 config['model'] = {
     'vision_embed_dim': 192,
     'vision_layers': 4,
@@ -126,6 +132,7 @@ config['model'] = {
 **Purpose**: Toy problem / synthetic task that validates vision-language fusion works correctly.
 
 **Structure** (`tiny_vla_dataset.py:13-153`):
+
 - Generates 64x64 images with 3-4 colored blocks on an 8x8 grid
 - Language instructions: "find the [color] block"
 - Actions: Normalized (dx, dy) direction vectors from center to target block
@@ -134,6 +141,7 @@ config['model'] = {
 **Key Validation Metric**: A vision-only or language-only model cannot solve this task perfectly. Success requires proper multimodal fusion.
 
 **Dataset Generation**:
+
 - Train: 8000 samples (seed=42)
 - Val: 1000 samples (seed=43)
 - Test: 1000 samples (seed=44)
@@ -142,6 +150,7 @@ config['model'] = {
 ## Training Loop Details
 
 **Optimizer** (`train_tiny_vla.py:40-45`): AdamW with weight decay
+
 - Learning rate: 3e-4 with linear warmup (100 steps)
 - Gradient clipping: max_norm=1.0
 - Weight decay: 0.01
@@ -149,17 +158,19 @@ config['model'] = {
 **Loss Function**: MSE loss on continuous actions (L2 distance)
 
 **Checkpointing Strategy**:
+
 - Best model saved based on validation loss → `checkpoints/best_model.pt`
 - Periodic checkpoints every 5 epochs → `checkpoints/checkpoint_epoch_X.pt`
 - Config saved to `checkpoints/config.json`
 
 **Expected Performance** (minimal variant on BlockFind dataset):
+
 - Final validation L2 error: 0.05-0.10
 - Direction accuracy (cosine similarity > 0.8): >95%
 
 ## File Organization
 
-```
+```Text
 tiny_vla/
 ├── tiny_vla_model.py       # Core architecture (TinyViT, TinyLanguageModel, TinyVLA)
 ├── tiny_vla_dataset.py     # BlockFind synthetic dataset generator
@@ -174,6 +185,7 @@ tiny_vla/
 ### Adding New Action Spaces
 
 **Discrete actions** (e.g., {up, down, left, right}):
+
 ```python
 # In tiny_vla_model.py, replace action_head:
 self.action_head = nn.Sequential(
@@ -186,6 +198,7 @@ self.criterion = nn.NLLLoss()  # or CrossEntropyLoss
 ```
 
 **Higher-dimensional continuous actions** (e.g., 7-DOF robot arm):
+
 ```python
 config['model']['action_dim'] = 7  # x, y, z, roll, pitch, yaw, gripper
 ```
@@ -232,17 +245,20 @@ model = get_peft_model(model, lora_config)
 ## Debugging Tips
 
 **Model not learning (loss not decreasing)**:
+
 1. Verify dataset: `python tiny_vla_dataset.py` → check `sample_visualization.png`
 2. Check for NaN gradients: Add `torch.autograd.set_detect_anomaly(True)`
 3. Reduce learning rate or increase warmup steps
 4. Verify data preprocessing (images should be in [0, 1], actions in [-1, 1])
 
 **Out of GPU memory**:
+
 1. Reduce batch size: `config['training']['batch_size'] = 32` (from 64)
 2. Reduce model size: `config['model']['vision_embed_dim'] = 128` (from 192)
 3. Set `num_workers=0` if DataLoader is causing issues
 
 **Training too slow**:
+
 1. Increase batch size if memory allows (faster with larger batches)
 2. Reduce dataset size for prototyping: `config['training']['train_size'] = 2000`
 3. Reduce num_workers if CPU is bottleneck
@@ -252,7 +268,7 @@ model = get_peft_model(model, lora_config)
 
 | Component | TinyVLA | SmolVLA | OpenVLA |
 |-----------|---------|---------|---------|
-| Parameters | 13M | 450M | 7B |
+| Parameters | 14M | 450M | 7B |
 | Vision | TinyViT (4 layers) | SigLip | SigLip-Large |
 | Language | Custom (4 layers) | Phi-2 (32 layers) | Llama-2-7B |
 | Fusion | Cross-Attention  | Cross-Attention | Cross-Attention |

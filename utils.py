@@ -900,10 +900,56 @@ def check_projection_layer_impact(
     return {
         'features_before': features_before_proj,
         'features_after': features_after_proj,
-        'stats_before': stats_before,
         'stats_after': stats_after,
         'colors': colors
     }
+
+
+def check_text_generation(
+    model,
+    dataset,
+    num_samples: int = 5,
+    device: str = 'cuda'
+) -> None:
+    """
+    Check text generation capabilities of the model.
+    Prints sample inputs, ground truth, and generated text.
+    """
+    print("="*60)
+    print("Checking Text Generation")
+    print("="*60)
+    
+    model.eval()
+    
+    # Check if model has text decoder
+    if not getattr(model, 'use_text_decoder', False) or model.text_decoder is None:
+        print("Model does not have a text decoder enabled. Skipping.")
+        return
+
+    indices = np.random.choice(len(dataset), min(num_samples, len(dataset)), replace=False)
+    
+    for i, idx in enumerate(indices):
+        sample = dataset[idx]
+        image = sample['image'].unsqueeze(0).to(device)
+        instruction = sample['instruction']
+        description_gt = sample.get('description', 'N/A')
+        action_gt = sample['action'].numpy()
+        
+        # Prepare inputs
+        _, input_ids, attention_mask = model.prepare_inputs(image, [instruction])
+        
+        # Generate text
+        with torch.no_grad():
+            generated_ids = model.generate_text(image, input_ids, attention_mask)
+            generated_text = model.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            
+        print(f"\nSample {i+1}:")
+        print(f"  Instruction:  {instruction}")
+        print(f"  Action GT:    [{action_gt[0]:.2f}, {action_gt[1]:.2f}]")
+        print(f"  Text GT:      {description_gt}")
+        print(f"  Generated:    {generated_text}")
+        
+    print("\n" + "="*60)
 
 
 if __name__ == "__main__":
@@ -962,3 +1008,8 @@ if __name__ == "__main__":
         print("\n" + "="*60)
         print("="*60)
         magnitude_results = compare_vision_language_magnitudes(model, dataset, num_samples=200, device=device)
+
+        # Check text generation
+        print("\n" + "="*60)
+        print("="*60)
+        check_text_generation(model, dataset, num_samples=5, device=device)

@@ -1,6 +1,6 @@
 # TinyVLA: Fast-Iteration Vision-Language-Action Model
 
-A minimal Vision-Language-Action model designed for **rapid experimentation** on laptops/Colab with limited compute. The minimal variant (~13M parameters) but ~35x smaller than alternatives like SmolVLA for ultra-fast training.
+A minimal Vision-Language-Action model designed for **rapid experimentation** on laptops/Colab with limited compute. The minimal variant (~14M parameters) but ~35x smaller than alternatives like SmolVLA for ultra-fast training.
 
 _Note: This project is still in **active development**_
 
@@ -16,7 +16,7 @@ _Note: This project is still in **active development**_
 ## 📊 Model Architecture
 
 ```text
-TinyVLA Minimal Variant (~13M parameters)
+TinyVLA Minimal Variant (~14M parameters)
 ├── Vision Encoder: TinyViT (~1.8M params)
 │   ├── Patch embedding (8x8 patches)
 │   ├── 4 transformer layers
@@ -26,8 +26,10 @@ TinyVLA Minimal Variant (~13M parameters)
 │   ├── Token + position embeddings (7.8M for vocab)
 │   ├── 4 transformer layers
 │   └── 4 attention heads
-└── Action Head: MLP (~0.03M params)
-    └── Predicts continuous actions (dx, dy)
+├── Action Head: MLP (~0.03M params)
+│   └── Predicts continuous actions (dx, dy)
+└── Text Decoder: Transformer Decoder (~1M params)
+    └── Generates text descriptions (e.g., "move right")
 ```
 
 **Key design choices:**
@@ -36,6 +38,7 @@ TinyVLA Minimal Variant (~13M parameters)
 - **Transformer decoder for language**: Similar to Phi-2 but much smaller
 - **Simple fusion**: Vision CLS token + language pooling (can upgrade to cross-attention)
 - **Continuous action prediction**: MSE loss on (dx, dy) displacements
+- **Text generation**: Causal transformer decoder for explaining actions
 
 ## 🚀 Quick Start
 

@@ -52,9 +52,9 @@ class TinyVLAInference:
         )
         
         # Predict
-        action = self.model(image, input_ids, attention_mask)
+        actions, _ = self.model(image, input_ids, attention_mask)
         
-        return action.cpu().numpy()[0]
+        return actions.cpu().numpy()[0]
     
     @torch.no_grad()
     def predict_batch(self, images, instructions):
@@ -77,7 +77,38 @@ class TinyVLAInference:
         # Predict
         actions = self.model(images, input_ids, attention_mask)
         
-        return actions.cpu().numpy()
+    def generate_text(self, image, instruction):
+        """
+        Generate text description for a single image-instruction pair
+        
+        Args:
+            image: (C, H, W) tensor or (H, W, C) numpy array
+            instruction: string
+        Returns:
+            text: string
+        """
+        # Convert numpy to torch if needed
+        if isinstance(image, np.ndarray):
+            if image.shape[-1] == 3:  # (H, W, C) -> (C, H, W)
+                image = torch.from_numpy(image).permute(2, 0, 1)
+            else:
+                image = torch.from_numpy(image)
+        
+        # Add batch dimension
+        image = image.unsqueeze(0).to(self.device)
+        
+        # Prepare inputs
+        image, input_ids, attention_mask = self.model.prepare_inputs(
+            image, [instruction]
+        )
+        
+        # Generate
+        if getattr(self.model, 'use_text_decoder', False):
+            generated_ids = self.model.generate_text(image, input_ids, attention_mask)
+            text = self.model.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            return text
+        else:
+            return "Text decoder not enabled"
     
     def visualize_predictions(self, dataset, num_samples=8, save_path=None):
         """
@@ -102,8 +133,9 @@ class TinyVLAInference:
             instruction = sample['instruction']
             action_gt = sample['action'].numpy()
             
-            # Predict action
+            # Predict action and text
             action_pred = self.predict(image, instruction)
+            text_pred = self.generate_text(image, instruction)
             
             # Convert image for display
             image_display = image.permute(1, 2, 0).numpy()
@@ -114,9 +146,10 @@ class TinyVLAInference:
             # Plot
             ax.imshow(image_display)
             ax.set_title(
-                f"Instruction: {instruction}\n"
-                f"GT: [{action_gt[0]:.2f}, {action_gt[1]:.2f}] | "
+                f"Instr: {instruction}\n"
+                f"GT: [{action_gt[0]:.2f}, {action_gt[1]:.2f}]\n"
                 f"Pred: [{action_pred[0]:.2f}, {action_pred[1]:.2f}]\n"
+                f"Text: {text_pred}\n"
                 f"Error: {error:.3f}",
                 fontsize=8
             )
@@ -273,12 +306,14 @@ def main():
             action_gt = sample['action'].numpy()
             
             action_pred = inference.predict(image, instruction)
+            text_pred = inference.generate_text(image, instruction)
             error = np.linalg.norm(action_pred - action_gt)
             
             print(f"Sample {i+1}:")
             print(f"  Instruction: {instruction}")
             print(f"  Ground Truth: [{action_gt[0]:.3f}, {action_gt[1]:.3f}]")
             print(f"  Prediction:   [{action_pred[0]:.3f}, {action_pred[1]:.3f}]")
+            print(f"  Text Output:  {text_pred}")
             print(f"  L2 Error: {error:.3f}")
             print()
 

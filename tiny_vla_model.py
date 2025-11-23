@@ -240,10 +240,129 @@ class TinyLanguageModel(nn.Module):
         return x
 
 
+class TinyLanguageDecoder(nn.Module):
+    """
+    Tiny transformer decoder for text generation.
+    Conditions on fused VLA features via cross-attention.
+    """
+    def __init__(
+        self,
+        vocab_size: int = 30522,
+        embed_dim: int = 256,
+        num_layers: int = 4,
+        num_heads: int = 4,
+        max_seq_len: int = 128,
+        dropout: float = 0.1
+    ):
+        super().__init__()
+        
+        self.embed_dim = embed_dim
+        self.max_seq_len = max_seq_len
+        
+        # Token + position embeddings
+        self.token_embed = nn.Embedding(vocab_size, embed_dim)
+        self.pos_embed = nn.Parameter(torch.randn(1, max_seq_len, embed_dim) * 0.02)
+        
+        # Decoder blocks (Self-Attn + Cross-Attn + MLP)
+        self.blocks = nn.ModuleList([
+            DecoderBlock(embed_dim, num_heads, mlp_ratio=4.0, dropout=dropout)
+            for _ in range(num_layers)
+        ])
+        
+        self.norm = nn.LayerNorm(embed_dim)
+        self.head = nn.Linear(embed_dim, vocab_size)
+        self.dropout = nn.Dropout(dropout)
+        
+    def forward(self, input_ids, encoder_features, attention_mask=None):
+        """
+        Args:
+            input_ids: (B, seq_len) target text tokens
+            encoder_features: (B, 1, embed_dim) or (B, N, embed_dim) fused features to condition on
+            attention_mask: (B, seq_len) mask for input_ids (0 for pad)
+        Returns:
+            logits: (B, seq_len, vocab_size)
+        """
+        B, seq_len = input_ids.shape
+        
+        # Causal mask (tril)
+        causal_mask = torch.triu(torch.ones(seq_len, seq_len, device=input_ids.device), diagonal=1).bool()
+        
+        # Padding mask for self-attention
+        key_padding_mask = None
+        if attention_mask is not None:
+            key_padding_mask = (attention_mask == 0) # (B, seq_len)
+            
+        # Embeddings
+        x = self.token_embed(input_ids)
+        x = x + self.pos_embed[:, :seq_len, :]
+        x = self.dropout(x)
+        
+        # Decoder blocks
+        for block in self.blocks:
+            x = block(
+                x, 
+                memory=encoder_features,
+                tgt_mask=causal_mask,
+                tgt_key_padding_mask=key_padding_mask
+            )
+            
+        x = self.norm(x)
+        logits = self.head(x)
+        
+        return logits
+
+
+class DecoderBlock(nn.Module):
+    """Transformer decoder block with self-attention, cross-attention, and MLP"""
+    def __init__(self, dim, num_heads, mlp_ratio=4.0, dropout=0.1):
+        super().__init__()
+        
+        self.norm1 = nn.LayerNorm(dim)
+        self.self_attn = nn.MultiheadAttention(dim, num_heads, dropout=dropout, batch_first=True)
+        
+        self.norm2 = nn.LayerNorm(dim)
+        self.cross_attn = nn.MultiheadAttention(dim, num_heads, dropout=dropout, batch_first=True)
+        
+        self.norm3 = nn.LayerNorm(dim)
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = nn.Sequential(
+            nn.Linear(dim, mlp_hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(mlp_hidden_dim, dim),
+            nn.Dropout(dropout)
+        )
+        
+    def forward(self, x, memory, tgt_mask=None, tgt_key_padding_mask=None):
+        # Self-attention (causal)
+        # Query/Key/Value: ALL from decoder tokens (x)
+        x2 = self.norm1(x)
+        x = x + self.self_attn(
+            x2, x2, x2, 
+            attn_mask=tgt_mask,
+            key_padding_mask=tgt_key_padding_mask
+        )[0]
+        
+        # Cross-attention (conditioning on memory/encoder features)
+        # Query: from decoder (what text we're generating)
+        # Key/Value: from encoder (fused vision-language features)
+        # Mask: NONE (can attend to ALL encoder features)
+        x2 = self.norm2(x)
+        x = x + self.cross_attn(
+            query=x2, 
+            key=memory, 
+            value=memory
+        )[0]
+        
+        # MLP
+        x = x + self.mlp(self.norm3(x))
+        return x
+
+
 class TinyVLA(nn.Module):
     """
     Tiny Vision-Language-Action model
-    Default min config: ~13M parameters for ultra-fast iteration
+    Default min config: ~14M parameters for ultra-fast iteration
     
     Architecture (similar to SmolVLA):
     1. Vision encoder (TinyViT) - encodes images
@@ -264,9 +383,12 @@ class TinyVLA(nn.Module):
         action_dim: int = 2,
         max_seq_len: int = 32,
         dropout: float = 0.1,
-        use_pretrained_tokenizer: bool = True
+        use_pretrained_tokenizer: bool = True,
+        use_text_decoder: bool = True
     ):
         super().__init__()
+        
+        self.use_text_decoder = use_text_decoder
         
         # Vision encoder
         self.vision_encoder = TinyViT(
@@ -310,6 +432,19 @@ class TinyVLA(nn.Module):
             batch_first=True
         )
 
+        # Text Decoder (Optional)
+        if self.use_text_decoder:
+            self.text_decoder = TinyLanguageDecoder(
+                vocab_size=vocab_size,
+                embed_dim=lang_embed_dim,
+                num_layers=lang_layers, # Re-use same depth/width as encoder for simplicity
+                num_heads=lang_heads,
+                max_seq_len=max_seq_len,
+                dropout=dropout
+            )
+        else:
+            self.text_decoder = None
+
         # # Action head (predicts continuous actions)
         # self.action_head = nn.Sequential(
         #     nn.Linear(lang_embed_dim, lang_embed_dim // 2),
@@ -330,6 +465,7 @@ class TinyVLA(nn.Module):
             attention_mask: (B, seq_len)
         Returns:
             action_pred: (B, action_dim)
+            text_logits: (B, seq_len, vocab_size) if target_text_ids is provided, else None
         """
         # 1. Encode vision - Get ALL patch tokens (B, num_patches+1, vision_dim)
         vision_features = self.vision_encoder(images)
@@ -369,6 +505,114 @@ class TinyVLA(nn.Module):
         action_pred = self.action_head(fused_norm)
 
         return action_pred
+
+    def forward(self, images, input_ids, attention_mask=None, target_text_ids=None):
+        """
+        Args:
+            images: (B, C, H, W)
+            input_ids: (B, seq_len) - Instruction text
+            attention_mask: (B, seq_len) - Mask for instruction
+            target_text_ids: (B, seq_len) - Optional target text for decoder training
+        Returns:
+            action_pred: (B, action_dim)
+            text_logits: (B, seq_len, vocab_size) or None
+        """
+        # 1. Encode vision - Get ALL patch tokens (B, num_patches+1, vision_dim)
+        vision_features = self.vision_encoder(images)
+
+        # 2. Encode language - Get the [CLS] token as the instruction summary
+        lang_features = self.language_model(input_ids, attention_mask)
+        lang_pooled = lang_features[:, 0, :]  # (B, lang_dim)
+
+        # 3. Project vision *patch* features to lang_dim (discarding vision [CLS])
+        # Note: We use vision_features[:, 1:, :] to skip the global [CLS] token
+        vision_patches = vision_features[:, 1:, :]  # (B, num_patches, vision_dim)
+        vision_patches_proj = self.vision_proj(vision_patches)  # (B, num_patches, lang_dim)
+        # We can still normalize the patches
+        vision_patches_norm = self.vision_norm(vision_patches_proj)
+
+        # 4. Fuse with Cross-Attention
+        # Query (Q) = What the instruction is asking for (lang_pooled)
+        # Key (K)   = What we see in the image (vision_patches_norm)
+        # Value (V) = What we see in the image (vision_patches_norm)
+
+        # We unsqueeze lang_pooled to (B, 1, lang_dim) to act as a single query
+        fused_features, _ = self.fusion_attention(
+            query=lang_pooled.unsqueeze(1),
+            key=vision_patches_norm,
+            value=vision_patches_norm
+        )
+
+        # Squeeze out the query dimension (B, 1, lang_dim) -> (B, lang_dim)
+        fused = fused_features.squeeze(1)
+
+        fused_with_residual = lang_pooled + fused
+
+        fused_norm = self.fusion_output_norm(fused_with_residual)
+
+        # 5. Predict action from this spatially-aware fused representation
+        action_pred = self.action_head(fused_norm)
+
+        # 6. Decode text (if decoder exists and targets provided)
+        text_logits = None
+        if self.text_decoder is not None and target_text_ids is not None:
+            # Condition on the fused feature (unsqueeze to B, 1, dim)
+            text_logits = self.text_decoder(
+                target_text_ids, 
+                fused_norm.unsqueeze(1)
+            )
+
+        return action_pred, text_logits
+
+    def generate_text(self, images, input_ids, attention_mask=None, max_new_tokens=20, start_token_id=101):
+        """
+        Autoregressive text generation
+        """
+        if self.text_decoder is None:
+            return None
+            
+        B = images.shape[0]
+        device = images.device
+        
+        # Run encoder forward pass to get fused features
+        # (Duplicating logic from forward() to avoid refactoring everything into sub-methods for now)
+        vision_features = self.vision_encoder(images)
+        lang_features = self.language_model(input_ids, attention_mask)
+        lang_pooled = lang_features[:, 0, :]
+        vision_patches = vision_features[:, 1:, :]
+        vision_patches_proj = self.vision_proj(vision_patches)
+        vision_patches_norm = self.vision_norm(vision_patches_proj)
+        
+        fused_features, _ = self.fusion_attention(
+            query=lang_pooled.unsqueeze(1),
+            key=vision_patches_norm,
+            value=vision_patches_norm
+        )
+        fused = fused_features.squeeze(1)
+        fused_with_residual = lang_pooled + fused
+        fused_norm = self.fusion_output_norm(fused_with_residual)
+        
+        # Encoder memory: (B, 1, dim)
+        memory = fused_norm.unsqueeze(1)
+        
+        # Start with [CLS] token (or whatever start_token_id is passed)
+        curr_ids = torch.full((B, 1), start_token_id, dtype=torch.long, device=device)
+        
+        for _ in range(max_new_tokens):
+            # Forward pass through decoder
+            logits = self.text_decoder(curr_ids, memory)
+            
+            # Greedy decode: take argmax of last token
+            next_token_logits = logits[:, -1, :]
+            next_token = torch.argmax(next_token_logits, dim=-1).unsqueeze(1)
+            
+            # Append
+            curr_ids = torch.cat([curr_ids, next_token], dim=1)
+            
+            # Stop if all batches have hit [SEP] (102) - simplified check
+            # For now, just generate fixed length
+            
+        return curr_ids
     
     def count_parameters(self):
         """Count total parameters"""
@@ -451,10 +695,21 @@ if __name__ == "__main__":
     
     images, input_ids, attention_mask = model.prepare_inputs(images, instructions)
     
+    # Dummy target text for testing decoder
+    target_text = ["move right", "move left", "move up", "move down"]
+    _, target_ids, _ = model.prepare_inputs(images, target_text) # Reuse prepare_inputs for targets
+
     with torch.no_grad():
-        actions = model(images, input_ids, attention_mask)
-    
+        actions, text_logits = model(images, input_ids, attention_mask, target_text_ids=target_ids)
+        
+        # Test generation
+        generated_ids = model.generate_text(images, input_ids, attention_mask)
+        generated_text = model.tokenizer.batch_decode(generated_ids)
+
     print(f"Input shape: {images.shape}")
-    print(f"Output shape: {actions.shape}")
+    print(f"Action Output shape: {actions.shape}")
+    if text_logits is not None:
+        print(f"Text Logits shape: {text_logits.shape}")
     print(f"Sample action prediction: {actions[0]}")
+    print(f"Generated text sample: {generated_text[0]}")
     print("\nModel test successful!")
