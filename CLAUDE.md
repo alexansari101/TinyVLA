@@ -179,7 +179,10 @@ tiny_vla/
 ├── train_tiny_vla.py       # Training loop with TensorBoard logging
 ├── inference_tiny_vla.py   # Evaluation and visualization
 ├── test_setup.py           # Environment verification
-└── requirements.txt        # PyTorch, transformers, matplotlib, tensorboard
+├── requirements.txt        # PyTorch, transformers, matplotlib, tensorboard
+└── utils/                  # Utility modules
+    ├── debug.py            # Diagnostic utilities for feature analysis
+    └── benchmark.py        # Training benchmark and performance metrics
 ```
 
 ## Common Modifications

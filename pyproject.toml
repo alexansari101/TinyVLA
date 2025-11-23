@@ -38,4 +38,4 @@ build-backend = "hatchling.build"
 dev-dependencies = []
 
 [tool.hatch.build.targets.wheel]
-packages = ["tiny_vla_model.py", "tiny_vla_dataset.py", "train_tiny_vla.py", "inference_tiny_vla.py", "test_setup.py"]
+packages = ["tiny_vla_model.py", "tiny_vla_dataset.py", "train_tiny_vla.py", "inference_tiny_vla.py", "test_setup.py", "utils"]
