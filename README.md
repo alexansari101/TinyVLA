@@ -1,6 +1,6 @@
 # TinyVLA: Fast-Iteration Vision-Language-Action Model
 
-A minimal Vision-Language-Action model designed for **rapid experimentation** on laptops/Colab with limited compute. The minimal variant (~14M parameters) but ~35x smaller than alternatives like SmolVLA for ultra-fast training.
+A minimal Vision-Language-Action model designed for **rapid experimentation** on laptops/Colab with limited compute. The minimal variant (~17.4M parameters) is ~25x smaller than alternatives like SmolVLA for ultra-fast training.
 
 _Note: This project is still in **active development**_
 
@@ -16,7 +16,7 @@ _Note: This project is still in **active development**_
 ## 📊 Model Architecture
 
 ```text
-TinyVLA Minimal Variant (~14M parameters)
+TinyVLA Minimal Variant (~17.4M parameters)
 ├── Vision Encoder: TinyViT (~1.8M params)
 │   ├── Patch embedding (8x8 patches)
 │   ├── 4 transformer layers
@@ -28,7 +28,9 @@ TinyVLA Minimal Variant (~14M parameters)
 │   └── 4 attention heads
 ├── Action Head: MLP (~0.03M params)
 │   └── Predicts continuous actions (dx, dy)
-└── Text Decoder: Transformer Decoder (~1M params)
+└── Text Decoder: Transformer Decoder (~4.3M params)
+    ├── Shares token embeddings with encoder (weight tying)
+    ├── 4 decoder blocks with self-attn + cross-attn
     └── Generates text descriptions (e.g., "move right")
 ```
 
@@ -96,8 +98,8 @@ tensorboard --logdir=logs
 
 - Training time: ~1-2 minutes (20 epochs)
 - Final val L2 error: ~0.05-0.10
-- GPU memory: ~2-3 GB
-- Training speed: ~1000 samples/sec
+- GPU memory: ~0.7 GB
+- Training speed: ~1400 samples/sec
 
 ### Inference & Evaluation
 

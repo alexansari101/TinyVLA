@@ -290,6 +290,7 @@ def main():
     
     # Evaluate
     if args.evaluate:
+        # TODO: implement evaluation
         metrics = inference.evaluate_accuracy(test_dataset, num_samples=args.num_samples)
     
     # Interactive demo

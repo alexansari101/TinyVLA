@@ -499,9 +499,8 @@ def visualize_patch_features(
     # Plot
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
-    # --- FIX: Convert (C, H, W) tensor to (H, W, C) numpy array ---
+    # Convert (C, H, W) tensor to (H, W, C) numpy array
     img_to_plot = sample['image'].permute(1, 2, 0).cpu().numpy()
-    # -------------------------------------------------------------
 
     # Original image
     axes[0].imshow(img_to_plot) # Use the permuted image

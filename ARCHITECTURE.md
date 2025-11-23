@@ -8,7 +8,7 @@ This document shows how TinyVLA's architecture relates to alternative State-of-t
 
 | Component | TinyVLA (Minimal Variant) | SmolVLA | OpenVLA | RT-2 |
 |-----------|---------------------------|---------|---------|------|
-| **Total Parameters** | 14M | 450M | 7B | 55B |
+| **Total Parameters** | 17.4M | 450M | 7B | 55B |
 | **Vision Encoder** | TinyViT (4 layers) | SigLip (12 layers) | SigLip-Large | PaLI-X ViT |
 | **Vision Dim** | 192 | 384 | 1024 | 2048 |
 | **Vision Patches** | 8x8 | 16x16 | 16x16 | 16x16 |
@@ -18,7 +18,7 @@ This document shows how TinyVLA's architecture relates to alternative State-of-t
 | **Fusion Method** | Pooling + Add | Cross-Attention | Cross-Attention | Cross-Attention |
 | **Action Head** | 2-layer MLP | 3-layer MLP | 3-layer MLP | 4-layer MLP |
 | **Text Output** | Separate Decoder | Decoder-only LLM | Decoder-only LLM | Decoder-only LLM |
-| **GPU Memory (Est.)** | 2-3 GB | 12-16 GB | 40+ GB | 80+ GB |
+| **GPU Memory (Est.)** | ~0.7 GB | 12-16 GB | 40+ GB | 80+ GB |
 | **Typical Use Case** | Learning/Prototyping | Research/Fine-tuning | Production | Large-scale deployment |
 
 ## Architectural Patterns

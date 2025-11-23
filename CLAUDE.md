@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TinyVLA is a minimal Vision-Language-Action model designed for rapid experimentation on limited compute. The minimal variant (~14M parameters) is intended to be architecturally similar to state-of-the-art VLA models (SmolVLA, OpenVLA) but ~35x smaller for ultra-fast training iterations.
+TinyVLA is a minimal Vision-Language-Action model designed for rapid experimentation on limited compute. The minimal variant (~17.4M parameters) is intended to be architecturally similar to state-of-the-art VLA models (SmolVLA, OpenVLA) but ~25x smaller for ultra-fast training iterations.
 
 ## Design Goals
 
@@ -102,12 +102,14 @@ This is deliberately simple for fast iteration. For production scaling, consider
 All hyperparameters are in `train_tiny_vla.py:232-256`. To scale up:
 
 ```python
-# Minimal variant (default): ~14M params
+# Minimal variant (default): ~17.4M params
+# (includes ~4.3M text decoder with weight tying)
 config['model'] = {
     'vision_embed_dim': 192,
     'vision_layers': 4,
     'lang_embed_dim': 256,
     'lang_layers': 4,
+    'use_text_decoder': True
 }
 
 # MediumVLA: ~100M params
@@ -268,7 +270,7 @@ model = get_peft_model(model, lora_config)
 
 | Component | TinyVLA | SmolVLA | OpenVLA |
 |-----------|---------|---------|---------|
-| Parameters | 14M | 450M | 7B |
+| Parameters | 17.4M | 450M | 7B |
 | Vision | TinyViT (4 layers) | SigLip | SigLip-Large |
 | Language | Custom (4 layers) | Phi-2 (32 layers) | Llama-2-7B |
 | Fusion | Cross-Attention  | Cross-Attention | Cross-Attention |
