@@ -167,7 +167,7 @@ config['model'] = {
 
 **Expected Performance** (minimal variant on BlockFind dataset):
 
-- Final validation L2 error: 0.05-0.10
+- Final validation L2 error: <0.004
 - Direction accuracy (cosine similarity > 0.8): >95%
 
 ## File Organization

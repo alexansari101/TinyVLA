@@ -97,7 +97,7 @@ tensorboard --logdir=logs
 **Expected results for minimal variant (on a laptop with an RTX 3070):**
 
 - Training time: ~1-2 minutes (20 epochs)
-- Final val L2 error: ~0.05-0.10
+- Final val L2 error: <0.004
 - GPU memory: ~0.7 GB
 - Training speed: ~1400 samples/sec
 
