@@ -38,7 +38,7 @@ TinyVLA Minimal Variant (~17.4M parameters)
 
 - **ViT-style vision encoder**: Same patch-based approach as SigLip/FasterViT
 - **Transformer decoder for language**: Similar to Phi-2 but much smaller
-- **Simple fusion**: Vision CLS token + language pooling (can upgrade to cross-attention)
+- **Cross-attention fusion**: Transformer decoder with self-attention and cross-attention to fused vision-language encoder features
 - **Continuous action prediction**: MSE loss on (dx, dy) displacements
 - **Text generation**: Causal transformer decoder for explaining actions
 
