@@ -482,55 +482,6 @@ class TinyVLA(nn.Module):
         self.action_head = nn.Linear(lang_embed_dim, action_dim)
 
         self.action_dim = action_dim
-        
-    def forward(self, images, input_ids, attention_mask=None):
-        """
-        Args:
-            images: (B, C, H, W)
-            input_ids: (B, seq_len)
-            attention_mask: (B, seq_len)
-        Returns:
-            action_pred: (B, action_dim)
-            text_logits: (B, seq_len, vocab_size) if target_text_ids is provided, else None
-        """
-        # 1. Encode vision - Get ALL patch tokens (B, num_patches+1, vision_dim)
-        vision_features = self.vision_encoder(images)
-
-        # 2. Encode language - Get the [CLS] token as the instruction summary
-        lang_features = self.language_model(input_ids, attention_mask)
-        lang_pooled = lang_features[:, 0, :]  # (B, lang_dim)
-
-        # 3. Project vision *patch* features to lang_dim (discarding vision [CLS])
-        # Note: We use vision_features[:, 1:, :] to skip the global [CLS] token
-        vision_patches = vision_features[:, 1:, :]  # (B, num_patches, vision_dim)
-        vision_patches_proj = self.vision_proj(vision_patches)  # (B, num_patches, lang_dim)
-        # We can still normalize the patches
-        vision_patches_norm = self.vision_norm(vision_patches_proj)
-
-        # 4. Fuse with Cross-Attention
-        # Query (Q) = What the instruction is asking for (lang_pooled)
-        # Key (K)   = What we see in the image (vision_patches_norm)
-        # Value (V) = What we see in the image (vision_patches_norm)
-
-        # We unsqueeze lang_pooled to (B, 1, lang_dim) to act as a single query
-        fused_features, _ = self.fusion_attention(
-            query=lang_pooled.unsqueeze(1),
-            key=vision_patches_norm,
-            value=vision_patches_norm
-        )
-
-        # Squeeze out the query dimension (B, 1, lang_dim) -> (B, lang_dim)
-        fused = fused_features.squeeze(1)
-
-        fused_with_residual = lang_pooled + fused
-
-        fused_norm = self.fusion_output_norm(fused_with_residual)
-
-        # 5. Predict action from this spatially-aware fused representation
-        # (We skip the manual vision/lang weights for this simpler, more powerful fusion)
-        action_pred = self.action_head(fused_norm)
-
-        return action_pred
 
     def forward(self, images, input_ids, attention_mask=None, target_text_ids=None):
         """

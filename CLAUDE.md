@@ -67,35 +67,55 @@ python -c "from tiny_vla_dataset import BlockFindDataset; d=BlockFindDataset(10)
 
 ## Architecture
 
-### Three-Component Pipeline
+### Four-Component Pipeline
 
-1. **Vision Encoder** (`TinyViT` in `tiny_vla_model.py:13-80`): ViT-style patch-based encoder
+1. **Vision Encoder** (`TinyViT` in `tiny_vla_model.py:70-152`): ViT-style patch-based encoder
    - 64x64 images → 8x8 patches → transformer blocks
    - Returns: `(B, num_patches+1, vision_embed_dim)` where first token is CLS
 
-2. **Language Model** (`TinyLanguageModel` in `tiny_vla_model.py:108-161`): Transformer decoder
+2. **Language Model** (`TinyLanguageModel` in `tiny_vla_model.py:183-240`): Transformer encoder
    - Uses DistilBERT tokenizer (pretrained for convenience)
    - Returns: `(B, seq_len, lang_embed_dim)`
 
-3. **Action Head** (`TinyVLA.action_head` in `tiny_vla_model.py:227-232`): Simple MLP
+3. **Fusion Module** (`tiny_vla_model.py:426-430, 450-455`): Cross-attention mechanism
+   - Projects vision patches to language dimension via `vision_proj` + `vision_norm`
+   - Language CLS token queries vision patches via `fusion_attention` (MultiheadAttention)
+   - Residual connection + `fusion_output_norm` for stable training
+   - Creates instruction-grounded spatial features
+
+4. **Action Head** (`tiny_vla_model.py:482`): Single linear layer
    - Input: Fused vision-language features
    - Output: Continuous actions (dx, dy) in range [-1, 1]
 
+5. **Text Decoder** (Optional, `TinyLanguageDecoder` in `tiny_vla_model.py:243-381`):
+   - Conditions on fused features via cross-attention for text generation
+   - Uses weight tying (shares embeddings with encoder, ties output head) → saves ~15.6M params
+
 ### Vision-Language Fusion Strategy
 
-Current implementation uses **simple pooling + addition** (`tiny_vla_model.py:256-259`):
+Current implementation uses **cross-attention fusion** (`tiny_vla_model.py:486-544`):
 
 ```python
-vision_pooled = vision_features[:, 0, :]  # CLS token
-lang_pooled = lang_features.mean(dim=1)   # Mean pooling
-fused = vision_pooled + lang_pooled       # Element-wise addition
+# Extract spatial features from vision (skip CLS token)
+vision_patches = vision_features[:, 1:, :]  # (B, num_patches, vision_dim)
+vision_patches_proj = self.vision_proj(vision_patches)  # Project to lang_dim
+vision_patches_norm = self.vision_norm(vision_patches_proj)
+
+# Pool instruction to single embedding
+lang_pooled = lang_features[:, 0, :]  # CLS token
+
+# Cross-attention: instruction queries relevant image regions
+fused_features, _ = self.fusion_attention(
+    query=lang_pooled.unsqueeze(1),      # What we're looking for
+    key=vision_patches_norm,             # Where to look
+    value=vision_patches_norm            # What we see
+)
+fused = fused_features.squeeze(1)
+fused_with_residual = lang_pooled + fused  # Residual connection
+fused_norm = self.fusion_output_norm(fused_with_residual)
 ```
 
-This is deliberately simple for fast iteration. For production scaling, consider:
-
-- Cross-attention (queries from language, keys/values from vision)
-- Learnable fusion tokens
-- Gated fusion mechanisms
+This architecture mirrors SmolVLA/OpenVLA's fusion mechanism, where language queries attend over spatial vision features to create instruction-grounded representations.
 
 ### Configuration System
 
