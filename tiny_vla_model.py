@@ -483,7 +483,7 @@ class TinyVLA(nn.Module):
 
         self.action_dim = action_dim
 
-    def encode_vision_language(self, images, input_ids, attention_mask=None):
+    def encode_vision_language(self, images, input_ids, attention_mask=None, return_intermediates=False):
         """
         Common encoder logic for both forward pass and text generation.
         Encodes vision and language, projects vision patches, and fuses them.
@@ -492,10 +492,19 @@ class TinyVLA(nn.Module):
             images: (B, C, H, W)
             input_ids: (B, seq_len)
             attention_mask: (B, seq_len)
+            return_intermediates: (bool) If True, returns a dict with intermediate features
             
         Returns:
-            fused_norm: (B, lang_dim) - Fused representation for action prediction
-            memory: (B, 1, lang_dim) - Memory for text decoder (same as fused_norm unsqueezed)
+            If return_intermediates is False:
+                fused_norm: (B, lang_dim) - Fused representation for action prediction
+                memory: (B, 1, lang_dim) - Memory for text decoder (same as fused_norm unsqueezed)
+            If return_intermediates is True:
+                intermediates: (dict) Dictionary containing:
+                    - fused_norm
+                    - memory
+                    - lang_pooled
+                    - vision_patches_norm
+                    - fused_pre_norm
         """
         # 1. Encode vision - Get ALL patch tokens (B, num_patches+1, vision_dim)
         vision_features = self.vision_encoder(images)
@@ -529,6 +538,16 @@ class TinyVLA(nn.Module):
         fused_with_residual = lang_pooled + fused
 
         fused_norm = self.fusion_output_norm(fused_with_residual)
+        
+        if return_intermediates:
+            return {
+                'fused_norm': fused_norm,
+                'memory': fused_norm.unsqueeze(1),
+                'lang_pooled': lang_pooled,
+                'vision_patches_norm': vision_patches_norm,
+                'fused_pre_norm': fused, # This is fused_features.squeeze(1)
+                'fused_with_residual': fused_with_residual
+            }
         
         # Return both the squeezed version (for action head) and unsqueezed (for decoder memory)
         return fused_norm, fused_norm.unsqueeze(1)

@@ -695,34 +695,17 @@ def compare_vision_language_magnitudes(
             attention_mask = tokens['attention_mask'].to(device)
             
             # --- Get features at each stage ---
-            
-            # 1. Language Query
-            lang_features = model.language_model(input_ids, attention_mask)
-            lang_pooled = lang_features[:, 0, :]      # (1, lang_dim)
-
-            # 2. Vision Patches (Key/Value)
-            vision_features = model.vision_encoder(image)
-            vision_patches = vision_features[:, 1:, :]
-            vision_patches_proj = model.vision_proj(vision_patches)
-            vision_patches_norm = model.vision_norm(vision_patches_proj) # (1, num_patches, lang_dim)
-
-            # 3. Fused Output (PRE-NORM)
-            fused_features, _ = model.fusion_attention(
-                query=lang_pooled.unsqueeze(1),
-                key=vision_patches_norm,
-                value=vision_patches_norm
+            intermediates = model.encode_vision_language(
+                image, 
+                input_ids, 
+                attention_mask, 
+                return_intermediates=True
             )
-            fused_pre_norm = fused_features.squeeze(1) # (1, lang_dim)
             
-            # 4. Fused Output (POST-NORM)
-            # This assumes your model has the residual connection and final norm
-            try:
-                fused_with_residual = lang_pooled + fused_pre_norm 
-                fused_post_norm = model.fusion_output_norm(fused_with_residual)
-            except AttributeError:
-                print("ERROR: Model does not seem to have fusion_output_norm.")
-                print("Skipping compare_vision_language_magnitudes.")
-                return {} # Return empty
+            lang_pooled = intermediates['lang_pooled']
+            vision_patches_norm = intermediates['vision_patches_norm']
+            fused_pre_norm = intermediates['fused_pre_norm']
+            fused_post_norm = intermediates['fused_norm']
             
             # --- Compute mean and std of the *values* ---
             lang_query_means.append(lang_pooled.mean().item())
