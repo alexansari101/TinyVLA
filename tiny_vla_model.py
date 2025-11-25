@@ -483,16 +483,19 @@ class TinyVLA(nn.Module):
 
         self.action_dim = action_dim
 
-    def forward(self, images, input_ids, attention_mask=None, target_text_ids=None):
+    def encode_vision_language(self, images, input_ids, attention_mask=None):
         """
+        Common encoder logic for both forward pass and text generation.
+        Encodes vision and language, projects vision patches, and fuses them.
+        
         Args:
             images: (B, C, H, W)
-            input_ids: (B, seq_len) - Instruction text
-            attention_mask: (B, seq_len) - Mask for instruction
-            target_text_ids: (B, seq_len) - Optional target text for decoder training
+            input_ids: (B, seq_len)
+            attention_mask: (B, seq_len)
+            
         Returns:
-            action_pred: (B, action_dim)
-            text_logits: (B, seq_len, vocab_size) or None
+            fused_norm: (B, lang_dim) - Fused representation for action prediction
+            memory: (B, 1, lang_dim) - Memory for text decoder (same as fused_norm unsqueezed)
         """
         # 1. Encode vision - Get ALL patch tokens (B, num_patches+1, vision_dim)
         vision_features = self.vision_encoder(images)
@@ -526,6 +529,23 @@ class TinyVLA(nn.Module):
         fused_with_residual = lang_pooled + fused
 
         fused_norm = self.fusion_output_norm(fused_with_residual)
+        
+        # Return both the squeezed version (for action head) and unsqueezed (for decoder memory)
+        return fused_norm, fused_norm.unsqueeze(1)
+
+    def forward(self, images, input_ids, attention_mask=None, target_text_ids=None):
+        """
+        Args:
+            images: (B, C, H, W)
+            input_ids: (B, seq_len) - Instruction text
+            attention_mask: (B, seq_len) - Mask for instruction
+            target_text_ids: (B, seq_len) - Optional target text for decoder training
+        Returns:
+            action_pred: (B, action_dim)
+            text_logits: (B, seq_len, vocab_size) or None
+        """
+        # Use shared encoder logic
+        fused_norm, memory = self.encode_vision_language(images, input_ids, attention_mask)
 
         # 5. Predict action from this spatially-aware fused representation
         action_pred = self.action_head(fused_norm)
@@ -533,10 +553,10 @@ class TinyVLA(nn.Module):
         # 6. Decode text (if decoder exists and targets provided)
         text_logits = None
         if self.text_decoder is not None and target_text_ids is not None:
-            # Condition on the fused feature (unsqueeze to B, 1, dim)
+            # Condition on the fused feature (memory)
             text_logits = self.text_decoder(
                 target_text_ids, 
-                fused_norm.unsqueeze(1)
+                memory
             )
 
         return action_pred, text_logits
@@ -552,25 +572,8 @@ class TinyVLA(nn.Module):
         device = images.device
         
         # Run encoder forward pass to get fused features
-        # (Duplicating logic from forward() to avoid refactoring everything into sub-methods for now)
-        vision_features = self.vision_encoder(images)
-        lang_features = self.language_model(input_ids, attention_mask)
-        lang_pooled = lang_features[:, 0, :]
-        vision_patches = vision_features[:, 1:, :]
-        vision_patches_proj = self.vision_proj(vision_patches)
-        vision_patches_norm = self.vision_norm(vision_patches_proj)
-        
-        fused_features, _ = self.fusion_attention(
-            query=lang_pooled.unsqueeze(1),
-            key=vision_patches_norm,
-            value=vision_patches_norm
-        )
-        fused = fused_features.squeeze(1)
-        fused_with_residual = lang_pooled + fused
-        fused_norm = self.fusion_output_norm(fused_with_residual)
-        
-        # Encoder memory: (B, 1, dim)
-        memory = fused_norm.unsqueeze(1)
+        # Use shared encoder logic
+        _, memory = self.encode_vision_language(images, input_ids, attention_mask)
         
         # Start with [CLS] token (or whatever start_token_id is passed)
         curr_ids = torch.full((B, 1), start_token_id, dtype=torch.long, device=device)

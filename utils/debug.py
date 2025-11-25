@@ -162,27 +162,11 @@ def extract_fused_features(
             
             # --- Perform full forward pass ---
             image_batch = image_tensor.unsqueeze(0).to(device)
-            vision_features = model.vision_encoder(image_batch)
-            lang_features = model.language_model(input_ids, attention_mask)
-            lang_pooled = lang_features[:, 0, :]
-            vision_patches = vision_features[:, 1:, :]
-            vision_patches_proj = model.vision_proj(vision_patches)
-            vision_patches_norm = model.vision_norm(vision_patches_proj)
-            fused_features, _ = model.fusion_attention(
-                query=lang_pooled.unsqueeze(1),
-                key=vision_patches_norm,
-                value=vision_patches_norm
-            )
-            fused_pre_norm = fused_features.squeeze(1)
             
-            # This assumes your model has the residual connection and final norm
-            try:
-                fused_with_residual = lang_pooled + fused_pre_norm 
-                fused_final = model.fusion_output_norm(fused_with_residual)
-            except AttributeError:
-                print("ERROR: Model does not seem to have fusion_output_norm.")
-                print("Please add the residual connection and final norm layer to tiny_vla_model.py")
-                return {} # Return empty to avoid crashing
+            # Use shared encoder logic
+            fused_final, _ = model.encode_vision_language(image_batch, input_ids, attention_mask)
+            
+            # Note: fused_final is already normalized and has residual added in encode_vision_language
             
             features_list.append(fused_final.cpu().numpy()[0])
 
