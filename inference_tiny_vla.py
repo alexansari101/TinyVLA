@@ -77,6 +77,7 @@ class TinyVLAInference:
         # Predict
         actions = self.model(images, input_ids, attention_mask)
         
+    @torch.no_grad()
     def generate_text(self, image, instruction):
         """
         Generate text description for a single image-instruction pair
@@ -290,7 +291,6 @@ def main():
     
     # Evaluate
     if args.evaluate:
-        # TODO: implement evaluation
         metrics = inference.evaluate_accuracy(test_dataset, num_samples=args.num_samples)
     
     # Interactive demo
